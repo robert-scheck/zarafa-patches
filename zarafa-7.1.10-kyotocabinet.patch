@@ -1,0 +1,28 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.10 which re-adds the ability to disable
+zarafa-search during build-time. This is e.g. required if CLucene and/or Kyotocabinet is unavailable or
+broken on the given system and/or architecture. Interestingly that patch is not new, I wrote these lines
+in 2012 the first time, proposed them as a patch to Zarafa and got merged. With a recent Zarafa release it
+seems they silently removed it again...
+
+--- zarafa-7.1.10/ECtools/zarafa-search/Makefile.am			2014-05-23 15:03:49.000000000 +0200
++++ zarafa-7.1.10/ECtools/zarafa-search/Makefile.am.kyotocabinet	2014-07-10 21:48:42.000000000 +0200
+@@ -1,4 +1,8 @@
++if WITH_CLUCENE
++if WITH_KYOTOCABINET
+ bin_PROGRAMS = zarafa-search
++endif
++endif
+ 
+ AM_CPPFLAGS = ${ZCPPFLAGS} \
+ 	-I${top_srcdir}/mapi4linux/include \
+--- zarafa-7.1.10/ECtools/zarafa-search/Makefile.in			2014-05-23 15:04:02.000000000 +0200
++++ zarafa-7.1.10/ECtools/zarafa-search/Makefile.in.kyotocabinet	2014-07-10 21:49:16.000000000 +0200
+@@ -34,7 +34,7 @@
+ POST_UNINSTALL = :
+ build_triplet = @build@
+ host_triplet = @host@
+-bin_PROGRAMS = zarafa-search$(EXEEXT)
++@WITH_CLUCENE_TRUE@@WITH_KYOTOCABINET_TRUE@bin_PROGRAMS = zarafa-search$(EXEEXT)
+ subdir = ECtools/zarafa-search
+ DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
+ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4

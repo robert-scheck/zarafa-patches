@@ -1,0 +1,38 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa < 6.40.6, which backports the
+optional installation of zarafa-archiver and adds the missing pre-processor directive. SVN
+upstream revision 25200 (6.40.6 beta1).
+
+--- zarafa-6.40.5/installer/linux/Makefile.am		2011-01-24 12:03:45.000000000 +0100
++++ zarafa-6.40.6/installer/linux/Makefile.am		2011-02-08 09:33:50.000000000 +0100
+@@ -108,5 +108,7 @@
+ 	fi
+ 	install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-indexer/example-config
+ 	mv ${DESTDIR}/${data_configdir}/indexer.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-indexer/example-config
+-	install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config
+-	mv ${DESTDIR}/${data_configdir}/archiver.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config
++	if [ -f ${DESTDIR}/${data_configdir}/archiver.cfg ]; then \
++		install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config; \
++		mv ${DESTDIR}/${data_configdir}/archiver.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config; \
++	fi
+--- zarafa-6.40.5/installer/linux/Makefile.in		2011-01-24 13:06:15.000000000 +0100
++++ zarafa-6.40.6/installer/linux/Makefile.in		2011-02-08 09:35:20.000000000 +0100
+@@ -693,8 +693,10 @@
+ 	fi
+ 	install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-indexer/example-config
+ 	mv ${DESTDIR}/${data_configdir}/indexer.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-indexer/example-config
+-	install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config
+-	mv ${DESTDIR}/${data_configdir}/archiver.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config
++	if [ -f ${DESTDIR}/${data_configdir}/archiver.cfg ]; then \
++		install -d -m 755 ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config; \
++		mv ${DESTDIR}/${data_configdir}/archiver.cfg ${DESTDIR}/${datarootdir}/doc/zarafa-archiver/example-config; \
++	fi
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+ .NOEXPORT:
+--- zarafa-6.40.5/provider/libserver/ECIndexer.h	2011-01-24 16:55:05.000000000 +0100
++++ zarafa-6.40.6/provider/libserver/ECIndexer.h	2011-02-08 13:06:22.000000000 +0100
+@@ -60,3 +60,4 @@
+ 
+ ECRESULT GetIndexerResults(ECConfig *lpConfig, ECLogger *lpLogger, ECCacheManager *lpCacheManager, GUID *guidServer, unsigned int ulStoreId, ECListInt &lstFolders, struct restrictTable *lpRestrict, ECSearchResultArray **lppIndexerResults);
+ 
++#endif

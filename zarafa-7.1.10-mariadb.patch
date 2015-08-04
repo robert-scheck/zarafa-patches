@@ -1,0 +1,22 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.10 which really (!) adds support for
+MariaDB. In theory, Zarafa 7.1.10 supports MariaDB, see https://jira.zarafa.com/browse/ZCP-11934 for some
+upstream details. However it poorly fails if really trying it with e.g. MariaDB 5.5.38:
+
+Jul 10 23:40:40 tux zarafa-server[24633]: SQL [00000002] result failed: BIGINT UNSIGNED value is out of range in '(`zarafa`.`properties`.`tag` - 0x8501)', Query: "SELECT 0,properties.tag,properties.type,properties.val_ulong,properties.val_string,properties.val_binary,properties.val_double,properties.val_longint,properties.val_hi,properties.val_lo, hierarchyid, names.nameid, names.namestring, names.guid FROM properties FORCE INDEX (PRIMARY) LEFT JOIN names ON (properties.tag-0x8501)=names.id WHERE hierarchyid=3 AND (tag <= 0x8500 OR names.id IS NOT NULL)"
+Jul 10 23:40:40 tux zarafa-server[24633]: SQL [00000004] result failed: BIGINT UNSIGNED value is out of range in '(`zarafa`.`properties`.`tag` - 0x8501)', Query: "SELECT 0,properties.tag,properties.type,properties.val_ulong,properties.val_string,properties.val_binary,properties.val_double,properties.val_longint,properties.val_hi,properties.val_lo, hierarchyid, names.nameid, names.namestring, names.guid FROM properties FORCE INDEX (PRIMARY) LEFT JOIN names ON (properties.tag-0x8501)=names.id WHERE hierarchyid=4 AND (tag <= 0x8500 OR names.id IS NOT NULL)"
+Jul 10 23:40:40 tux zarafa-server[24633]: SQL [00000006] result failed: BIGINT UNSIGNED value is out of range in '(`zarafa`.`properties`.`tag` - 0x8501)', Query: "SELECT 0,properties.tag,properties.type,properties.val_ulong,properties.val_string,properties.val_binary,properties.val_double,properties.val_longint,properties.val_hi,properties.val_lo, hierarchyid, names.nameid, names.namestring, names.guid FROM properties FORCE INDEX (PRIMARY) LEFT JOIN names ON (properties.tag-0x8501)=names.id WHERE hierarchyid=4 AND (tag <= 0x8500 OR names.id IS NOT NULL)"
+
+Even this might not be a clean solution it at least makes Zarafa usable with MariaDB - which is important
+nowadays as Red Hat Enterprise Linux and CentOS 7 are only shipping MariaDB by default rather MySQL.
+
+--- zarafa-7.1.10/provider/libserver/ECDatabaseMySQL.cpp		2014-05-23 15:56:38.000000000 +0200
++++ zarafa-7.1.10/provider/libserver/ECDatabaseMySQL.cpp.mariadb	2014-07-10 23:44:19.000000000 +0200
+@@ -628,7 +628,7 @@
+ 
+ 	if (m_lpMySQL.server_version && m_lpMySQL.server_version[0] >= '5') {
+ 		// this option was introduced in mysql 5.0, so let's not even try on 4.1 servers
+-		strQuery = "SET SESSION sql_mode = 'STRICT_ALL_TABLES'";
++		strQuery = "SET SESSION sql_mode = 'STRICT_ALL_TABLES,NO_UNSIGNED_SUBTRACTION'";
+ 		Query(strQuery); // ignore error
+ 	}
+ 

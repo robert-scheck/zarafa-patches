@@ -1,0 +1,20 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.11 which removes the Zarafa-
+specific override/limitation that forces SSLv3-only SOAP connection between the Zarafa services.
+The pristine gSOAP library itself uses SSLv23_method() instead and thus allows TLSv1.0, TLSv1.1
+as well as TLSv1.2.
+
+Proposed to upstream via e-mail on Wed, 2 Apr 2014 11:35:40 +0200, initial patch was put into the
+upstream ticket Ticket#2014040210000266.
+
+--- zarafa-7.1.11/provider/common/SOAPSock.cpp			2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11/provider/common/SOAPSock.cpp.gsoap-sslv3	2015-02-18 01:15:50.000000000 +0100
+@@ -162,9 +162,6 @@
+ 
+ 	lpCmd->endpoint = strdup(strServerPath.c_str());
+ 
+-	// override the gsoap default v23 method to the force safer v3 only method.
+-	lpCmd->soap->ctx = SSL_CTX_new(SSLv3_method());
+-
+ #ifdef WITH_OPENSSL
+ 	if (strncmp("https:", lpCmd->endpoint, 6) == 0) {
+ 		// no need to add certificates to call, since soap also calls SSL_CTX_set_default_verify_paths()

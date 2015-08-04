@@ -1,0 +1,19 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.10 which fixes the RFC-
+violating reply of the Zarafa IMAP gateway in response to a failed SEARCH CHARSET request.
+This is documented at http://tools.ietf.org/html/rfc3501#page-64: "BADCHARSET: Optionally
+followed by a parenthesized list of charsets. [...]". This patch adds missing parenthesis.
+
+Proposed to upstream via e-mail on Sun, 27 Jul 2014 23:58:01 +0200, patch was put into the
+upstream ticket https://jira.zarafa.com/browse/ZCP-12504.
+
+--- zarafa-7.1.10/gateway/IMAP.cpp			2014-05-23 15:56:37.000000000 +0200
++++ zarafa-7.1.10/gateway/IMAP.cpp.imap-badcharset	2014-07-27 23:42:30.000000000 +0200
+@@ -2409,7 +2409,7 @@
+ 		if (lstSearchCriteria[1] != "WINDOWS-1252") {
+ 			iconv = new ECIConv("windows-1252", lstSearchCriteria[1]);
+ 			if (!iconv->canConvert()) {
+-				hr2 = HrResponse(RESP_TAGGED_NO, strTag, "[BADCHARSET WINDOWS-1252] "+strMode+"SEARCH charset not supported");
++				hr2 = HrResponse(RESP_TAGGED_NO, strTag, "[BADCHARSET (WINDOWS-1252)] "+strMode+"SEARCH charset not supported");
+ 				hr = MAPI_E_CALL_FAILED;
+ 				goto exit;
+ 			}

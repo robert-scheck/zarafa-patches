@@ -1,0 +1,32 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.1.11 which restricts replies by
+zarafa-autorespond to automated processes and mailing lists according to RFC 5230, section 4.6. For
+further details please have a look to http://tools.ietf.org/html/rfc5230#page-8 as well.
+
+Proposed to upstream via e-mail on Wed, 27 Aug 2014 23:30:31 +0200, patch was put into the upstream
+ticket https://jira.zarafa.com/browse/ZCP-12590.
+
+--- zarafa-7.1.11/spooler/DAgent.cpp				2014-08-24 12:27:06.000000000 +0200
++++ zarafa-7.1.11/spooler/DAgent.cpp.vacation-headers		2014-08-27 23:20:18.000000000 +0200
+@@ -1422,11 +1422,19 @@
+ 
+ 	// See if we're looping
+ 	if (lpMessageProps[0].ulPropTag == PR_TRANSPORT_MESSAGE_HEADERS_A) {
+-		if ( (strstr(lpMessageProps[0].Value.lpszA, "X-Zarafa-Vacation:") != NULL) ||
+-			 (strstr(lpMessageProps[0].Value.lpszA, "Auto-Submitted:") != NULL) ||
+-			 (strstr(lpMessageProps[0].Value.lpszA, "Precedence:") != NULL) )
++		if ( (strstr(lpMessageProps[0].Value.lpszA, "X-Zarafa-Vacation:") != NULL) ||		// Zarafa
++			 (strstr(lpMessageProps[0].Value.lpszA, "Auto-Submitted:") != NULL) ||		// RFC 3834
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Id:") != NULL) ||			// RFC 2919
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Help:") != NULL) ||		// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Subscribe:") != NULL) ||		// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Unsubscribe:") != NULL) ||	// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Post:") != NULL) ||		// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Owner:") != NULL) ||		// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "List-Archive:") != NULL) ||		// RFC 2369
++			 (strstr(lpMessageProps[0].Value.lpszA, "Precedence:") != NULL) )		// RFC 3834
+ 			// Vacation header already present, do not send vacation reply
+ 			// Precedence: list/bulk/junk, do not reply to these mails
++			// See also http://tools.ietf.org/html/rfc5230#page-8 for details
+ 			goto exit;
+ 		// save headers to a file so they can also be tested from the script we're runing
+ 		snprintf(szTemp, PATH_MAX, "%s/autorespond-headers.XXXXXX", getenv("TEMP") == NULL ? "/tmp" : getenv("TEMP"));

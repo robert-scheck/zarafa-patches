@@ -1,0 +1,138 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.4, which allows to build Zarafa even
+if Kyoto Cabinet is not available. In the end it's introducing the same behaviour like CLucene has at the
+moment already. If you build using './configure --with-clucene-lib-prefix=' simply no zarafa-search gets
+build. But if you build using './configure --with-clucene-lib-prefix= --disable-kyotocabinet', simply no
+zarafa-search will be build on Zarafa 7.1. If you don't pass both options, it's looking for CLucene and
+Kyoto Cabinet like before. However, there are (experimental) architectures, where one or both is not (yet)
+available and this avoids building Zarafa on these architectures and/or systems. It should not introduce
+any regressions, just give some more flexibility to packagers. https://jira.zarafa.com/browse/ZCP-9862 is
+providing some more information.
+
+--- zarafa-7.1.4/configure.ac						2013-02-28 16:12:05.000000000 +0100
++++ zarafa-7.1.4/configure.ac.kyotocabinetc				2013-03-23 22:32:04.000000000 +0100
+@@ -411,7 +411,15 @@
+ CXXFLAGS=$CXXFLAGS_system
+ CPPFLAGS=$CPPFLAGS_system
+ 
++AC_ARG_ENABLE(kyotocabinet, AC_HELP_STRING([--enable-kyotocabinet], [enable building with kyotocabinet support]), [want_kyotocabinet=${enableval}], [want_kyotocabinet=yes])
++AM_CONDITIONAL(WITH_KYOTOCABINET, test "$want_kyotocabinet" = "yes")
++if test "$want_kyotocabinet" = "yes"; then
+ PKG_CHECK_MODULES([KYOTOCABINET], [kyotocabinet])
++else
++AC_MSG_CHECKING([for KYOTOCABINET])
++AC_MSG_RESULT([$want_kyotocabinet])
++fi
++AM_CONDITIONAL([WITH_KYOTOCABINET], [test "$want_kyotocabinet" = "yes"])
+ AC_SUBST(KYOTOCABINET_CFLAGS)
+ AC_SUBST(KYOTOCABINET_LIBS)
+ 
+--- zarafa-7.1.4/ECtools/zarafa-search/Makefile.am			2013-02-28 16:13:19.000000000 +0100
++++ zarafa-7.1.4/ECtools/zarafa-search/Makefile.am.kyotocabinet		2013-03-23 22:32:58.000000000 +0100
+@@ -1,7 +1,9 @@
+ if WITH_CLUCENE
++if WITH_KYOTOCABINET
+ bin_PROGRAMS = zarafa-search
+ noinst_PROGRAMS = dump-index
+ endif
++endif
+ 
+ AM_CPPFLAGS = \
+ 	-I${top_srcdir}/mapi4linux/include \
+--- zarafa-7.1.4/configure						2013-03-23 22:39:03.000000000 +0100
++++ zarafa-7.1.4/configure.kyotocabinet					2013-03-23 22:43:14.000000000 +0100
+@@ -797,6 +797,8 @@
+ ICAL_CFLAGS
+ KYOTOCABINET_LIBS
+ KYOTOCABINET_CFLAGS
++WITH_KYOTOCABINET_FALSE
++WITH_KYOTOCABINET_TRUE
+ VMIME_LIBS
+ VMIME_CFLAGS
+ PKG_CONFIG_LIBDIR
+@@ -999,6 +1001,7 @@
+ with_mysql_config
+ enable_embedded_mysql
+ with_vmime_prefix
++enable_kyotocabinet
+ with_ical_prefix
+ with_clucene_lib_prefix
+ with_clucene_include_prefix
+@@ -1674,6 +1677,7 @@
+   --enable-swig           enable regenerating swig code
+   --enable-python         enable building python binding
+   --enable-embedded-mysql Compile zarafa-server with the embedded MySQL server
++  --enable-kyotocabinet   enable building with kyotocabinet support
+   --enable-epoll          enable building epoll socket handling
+   --enable-static-boost   Prefer the static boost libraries over the shared
+                           ones [no]
+@@ -18198,6 +18202,22 @@
+ CXXFLAGS=$CXXFLAGS_system
+ CPPFLAGS=$CPPFLAGS_system
+ 
++# Check whether --enable-kyotocabinet was given.
++if test "${enable_kyotocabinet+set}" = set; then :
++  enableval=$enable_kyotocabinet; want_kyotocabinet=${enableval}
++else
++  want_kyotocabinet=yes
++fi
++
++ if test "$want_kyotocabinet" = "yes"; then
++  WITH_KYOTOCABINET_TRUE=
++  WITH_KYOTOCABINET_FALSE='#'
++else
++  WITH_KYOTOCABINET_TRUE='#'
++  WITH_KYOTOCABINET_FALSE=
++fi
++
++if test "$want_kyotocabinet" = "yes"; then
+ 
+ pkg_failed=no
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for KYOTOCABINET" >&5
+@@ -18287,6 +18307,19 @@
+ $as_echo "yes" >&6; }
+ 
+ fi
++else
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for KYOTOCABINET" >&5
++$as_echo_n "checking for KYOTOCABINET... " >&6; }
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $want_kyotocabinet" >&5
++$as_echo "$want_kyotocabinet" >&6; }
++fi
++ if test "$want_kyotocabinet" = "yes"; then
++  WITH_KYOTOCABINET_TRUE=
++  WITH_KYOTOCABINET_FALSE='#'
++else
++  WITH_KYOTOCABINET_TRUE='#'
++  WITH_KYOTOCABINET_FALSE=
++fi
+ 
+ 
+ 
+@@ -20872,6 +20905,14 @@
+   as_fn_error $? "conditional \"WITH_XML2\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+ fi
++if test -z "${WITH_KYOTOCABINET_TRUE}" && test -z "${WITH_KYOTOCABINET_FALSE}"; then
++  as_fn_error $? "conditional \"WITH_KYOTOCABINET\" was never defined.
++Usually this means the macro was only invoked conditionally." "$LINENO" 5
++fi
++if test -z "${WITH_KYOTOCABINET_TRUE}" && test -z "${WITH_KYOTOCABINET_FALSE}"; then
++  as_fn_error $? "conditional \"WITH_KYOTOCABINET\" was never defined.
++Usually this means the macro was only invoked conditionally." "$LINENO" 5
++fi
+ if test -z "${WITH_CLUCENE_TRUE}" && test -z "${WITH_CLUCENE_FALSE}"; then
+   as_fn_error $? "conditional \"WITH_CLUCENE\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+--- zarafa-7.1.4/ECtools/zarafa-search/Makefile.in			2013-02-28 16:13:47.000000000 +0100
++++ zarafa-7.1.4/ECtools/zarafa-search/Makefile.in.kyotocabinet		2013-03-23 22:53:45.000000000 +0100
+@@ -34,8 +34,8 @@
+ POST_UNINSTALL = :
+ build_triplet = @build@
+ host_triplet = @host@
+-@WITH_CLUCENE_TRUE@bin_PROGRAMS = zarafa-search$(EXEEXT)
+-@WITH_CLUCENE_TRUE@noinst_PROGRAMS = dump-index$(EXEEXT)
++@WITH_CLUCENE_TRUE@@WITH_KYOTOCABINET_TRUE@bin_PROGRAMS = zarafa-search$(EXEEXT)
++@WITH_CLUCENE_TRUE@@WITH_KYOTOCABINET_TRUE@noinst_PROGRAMS = dump-index$(EXEEXT)
+ subdir = ECtools/zarafa-search
+ DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
+ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4

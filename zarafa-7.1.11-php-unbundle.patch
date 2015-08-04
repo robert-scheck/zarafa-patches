@@ -1,0 +1,39 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.11 which removes the bundled PHP PEAR files/libraries
+and replaces them by files and libraries shipped by the distribution. From file server/PEAR/JSON.php only the function
+json_decode() is used, which can be provided by the php-json RPM package. The file server/PEAR/XML/Unserializer.php can
+be provided by the php-pear-XML-Serializer RPM package. The rest of the PHP PEAR files/libraries are only dependencies of
+these two files mentioned before (which are satisfied by the two newly required RPM packages).
+
+--- zarafa-7.1.11.rsc/php-webclient-ajax/config.php.dist				2014-09-03 09:56:49.000000000 +0200
++++ zarafa-7.1.11.rsc/php-webclient-ajax/config.php.dist.php-unbundle			2014-09-07 18:24:28.000000000 +0200
+@@ -56,7 +56,7 @@
+ 
+ 	// Define the server paths
+ 	set_include_path(BASE_PATH. PATH_SEPARATOR . 
+-	                 BASE_PATH."server/PEAR/" .  PATH_SEPARATOR . 
++	                 "/usr/share/pear/" .  PATH_SEPARATOR . 
+ 	                 "/usr/share/php/");
+ 
+ 	// Define the relative URL for dialogs, this string is appended with HTTP GET arguments
+--- zarafa-7.1.11.rsc/php-webclient-ajax/zarafa.php					2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11.rsc/php-webclient-ajax/zarafa.php.php-unbundle			2014-09-07 18:21:36.000000000 +0200
+@@ -59,7 +59,7 @@
+ 	include("config.php");
+ 	include("defaults.php");
+ 	include("server/util.php");
+-	require("server/PEAR/JSON.php");
++	@include("server/PEAR/JSON.php");
+ 	
+ 	require("mapi/mapi.util.php");
+ 	require("mapi/mapicode.php");
+--- zarafa-7.1.11.rsc/php-webclient-ajax/server/core/class.xmlparser.php		2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11.rsc/php-webclient-ajax/server/core/class.xmlparser.php.php-unbundle	2014-09-07 18:22:40.000000000 +0200
+@@ -50,7 +50,7 @@
+ 
+ ?>
+ <?php
+-	require_once("server/PEAR/XML/Unserializer.php");
++	require_once("XML/Unserializer.php");
+ 
+ 	/**
+ 	* XML Parser

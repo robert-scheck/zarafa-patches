@@ -1,0 +1,27 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.0.8, which solves
+the invalid conversion that causes since zlib >= 1.2.8 a build failure like this:
+
+ECLogger.cpp:169:14: error: invalid conversion from 'gzFile_s* (*)(const char*,
+  const char*)' to 'ECLogger_File::open_func {aka void* (*)(const char*, const
+  char*)}' [-fpermissive]
+ECLogger.cpp:170:15: error: invalid conversion from 'int (*)(gzFile) {aka int (*)
+  (gzFile_s*)}' to 'ECLogger_File::close_func {aka int (*)(void*)}' [-fpermissive]
+ECLogger.cpp:171:16: error: invalid conversion from 'int (*)(gzFile, const char*,
+  ...) {aka int (*)(gzFile_s*, const char*, ...)}' to 'ECLogger_File::printf_func
+  {aka int (*)(void*, const char*, ...)}' [-fpermissive]
+
+--- zarafa-7.0.8/common/ECLogger.cpp		2012-06-18 18:55:28.000000000 +0200
++++ zarafa-7.0.8/common/ECLogger.cpp.zlib127	2012-06-19 23:23:06.000000000 +0200
+@@ -166,9 +166,9 @@
+ 		szMode = NULL;
+ 	} else {
+ 		if (compress) {
+-			fnOpen = &gzopen;
+-			fnClose = &gzclose;
+-			fnPrintf = &gzprintf;
++			fnOpen = (open_func)&gzopen;
++			fnClose = (close_func)&gzclose;
++			fnPrintf = (printf_func)&gzprintf;
+ 			fnFileno = NULL;
+ 			fnFlush = NULL;	// gzflush does exist, but degrades performance
+ 			szMode = "wb";

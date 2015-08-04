@@ -1,0 +1,254 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.0.9 which adds support for boost
+1.50 only providing filesystem version 3 while previous versions still supported version 2. Finally
+this patch really adds version 3 support while it does not remove support for version 2. Version 2
+is still required to build for example against Red Hat Enterprise Linux 6 shipping boost 1.41, thus
+filesystem version 2 only. Boost added filesystem version 3 with boost version 1.44 and made it the
+default with version 1.46.
+
+--- zarafa-7.0.9/configure					2012-08-03 13:58:18.000000000 +0200
++++ zarafa-7.0.9/configure.boost150				2012-08-12 23:57:39.000000000 +0200
+@@ -20363,48 +20363,6 @@
+ fi
+ 
+ 
+-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking boost version compatibility" >&5
+-$as_echo_n "checking boost version compatibility... " >&6; }
+-if test -n "$boost_major_version" -a $boost_major_version -ge 146; then
+-   { $as_echo "$as_me:${as_lineno-$LINENO}: result: adding backward compatible flags" >&5
+-$as_echo "adding backward compatible flags" >&6; }
+-   BOOST_CPPFLAGS="$BOOSTCPPFLAGS -DBOOST_FILESYSTEM_VERSION=2"
+-
+-    CXXFLAGS="$CXXFLAGS $BOOST_CPPFLAGS"
+-    LIBS="$BOOST_FILESYSTEM_LIBS $BOOST_SYSTEM_LIBS"
+-
+-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for boost filesystem version 2 presence" >&5
+-$as_echo_n "checking for boost filesystem version 2 presence... " >&6; }
+-    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+-/* end confdefs.h.  */
+-
+-
+-#include <boost/filesystem.hpp>
+-namespace bfs = boost::filesystem;
+-int main() {
+-  bfs::path path;
+-  bfs::directory_iterator pi(path);
+-  pi->path().file_string();
+-}
+-
+-_ACEOF
+-if ac_fn_cxx_try_link "$LINENO"; then :
+-   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
+-$as_echo "ok" >&6; }
+-else
+-   as_fn_error $? "no, boost is too new" "$LINENO" 5
+-
+-fi
+-rm -f core conftest.err conftest.$ac_objext \
+-    conftest$ac_exeext conftest.$ac_ext
+-
+-    LIBS=$libs_keep
+-    CFLAGS=$cflags_keep
+-else
+-   { $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
+-$as_echo "ok" >&6; }
+-fi
+-
+ # Check whether --enable-icu was given.
+ if test "${enable_icu+set}" = set; then :
+   enableval=$enable_icu; want_icu=${enableval}
+--- zarafa-7.0.9/configure.ac					2012-08-03 13:57:12.000000000 +0200
++++ zarafa-7.0.9/configure.ac.boost150				2012-08-12 23:57:39.000000000 +0200
+@@ -693,32 +693,6 @@
+ # BOOST_THREADS([mt])
+ BOOST_FILESYSTEM([mt])
+ BOOST_DATE_TIME([mt])
+-AC_MSG_CHECKING([boost version compatibility])
+-if test -n "$boost_major_version" -a $boost_major_version -ge 146; then
+-   AC_MSG_RESULT([adding backward compatible flags])
+-   BOOST_CPPFLAGS="$BOOSTCPPFLAGS -DBOOST_FILESYSTEM_VERSION=2"
+-
+-    CXXFLAGS="$CXXFLAGS $BOOST_CPPFLAGS"
+-    LIBS="$BOOST_FILESYSTEM_LIBS $BOOST_SYSTEM_LIBS"
+-
+-    AC_MSG_CHECKING([for boost filesystem version 2 presence])
+-    AC_LINK_IFELSE([
+-      AC_LANG_SOURCE([
+-#include <boost/filesystem.hpp>
+-namespace bfs = boost::filesystem;
+-int main() {
+-  bfs::path path;
+-  bfs::directory_iterator pi(path);
+-  pi->path().file_string();
+-}
+-      ]) ], [ AC_MSG_RESULT([ok]) ], [ AC_MSG_ERROR([no, boost is too new])
+-    ])
+-
+-    LIBS=$libs_keep
+-    CFLAGS=$cflags_keep
+-else
+-   AC_MSG_RESULT([ok])
+-fi
+ 
+ AC_ARG_ENABLE(icu, AC_HELP_STRING([--enable-icu],[enable icu support]), [want_icu=${enableval}],[want_icu=auto])
+ if test "$want_icu" = "no"; then
+--- zarafa-7.0.9/common/ECConfigImpl.cpp			2012-08-03 14:58:31.000000000 +0200
++++ zarafa-7.0.9/common/ECConfigImpl.cpp.boost150		2012-08-13 01:05:29.000000000 +0200
+@@ -322,11 +322,19 @@
+ 	m_currentFile = file;
+ 
+ 	if (!exists(file)) {
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++		errors.push_back("Config file '" + file.string() + "' does not exist.");
++#else
+ 		errors.push_back("Config file '" + file.file_string() + "' does not exist.");
++#endif
+ 		goto exit;
+ 	}
+ 	if (is_directory(file)) {
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++		errors.push_back("Config file '" + file.string() + "' is a directory.");
++#else
+ 		errors.push_back("Config file '" + file.file_string() + "' is a directory.");
++#endif
+ 		goto exit;
+ 	}
+ 
+@@ -338,8 +346,13 @@
+ 
+     m_readFiles.insert(file);
+ 
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++	if(!(fp = fopen(file.string().c_str(), "rt"))) {
++		errors.push_back("Unable to open config file '" + file.string() + "'");
++#else
+ 	if(!(fp = fopen(file.file_string().c_str(), "rt"))) {
+ 		errors.push_back("Unable to open config file '" + file.file_string() + "'");
++#endif
+ 		goto exit;
+ 	}
+ 
+@@ -424,9 +437,6 @@
+ }
+ 
+ 
+-#if (((BOOST_VERSION / 100) % 1000) < 36)
+-	#define remove_filename remove_leaf
+-#endif
+ bool ECConfigImpl::HandleInclude(const char *lpszArgs, unsigned int ulFlags)
+ {
+ 	string strValue;
+@@ -435,7 +445,11 @@
+ 	file = (strValue = trim(lpszArgs, " \t\r\n"));
+ 	if (!file.is_complete()) {
+ 		// Rebuild the path
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
+ 		file = m_currentFile.remove_filename();
++#else
++		file = m_currentFile.remove_leaf();
++#endif
+ 		file /= strValue;
+ 	}
+ 	
+@@ -639,8 +653,13 @@
+ 	fs::path pathBakFile;
+ 
+ 	pathOutFile = pathBakFile = szFileName;
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
+ 	pathOutFile.remove_filename() /= "config_out.cfg";
+ 	pathBakFile.remove_filename() /= "config_bak.cfg";
++#else
++	pathOutFile.remove_leaf() /= "config_out.cfg";
++	pathBakFile.remove_leaf() /= "config_bak.cfg";
++#endif
+ 
+ 	ifstream in(szFileName);
+ 
+@@ -659,7 +678,11 @@
+ 	}
+ 
+ 	// open temp output file
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++	ofstream out(pathOutFile.string().c_str());
++#else
+ 	ofstream out(pathOutFile.file_string().c_str());
++#endif
+ 
+ 	settingmap_t::iterator iterSettings;
+ 	const char* szName = NULL;
+@@ -680,7 +703,11 @@
+ 
+ // the stdio functions does not work in win release mode in some cases
+ 	remove(szFileName);
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++	rename(pathOutFile.string().c_str(),szFileName);
++#else
+ 	rename(pathOutFile.file_string().c_str(),szFileName);
++#endif
+ 
+ 	return true;
+ }
+--- zarafa-7.0.9/mapi4linux/src/m4l.mapisvc.cpp			2012-08-03 14:58:31.000000000 +0200
++++ zarafa-7.0.9/mapi4linux/src/m4l.mapisvc.cpp.boost150	2012-08-13 01:06:24.000000000 +0200
+@@ -125,14 +125,22 @@
+ 			if (is_directory(inffile->status()))
+ 				continue;
+ 
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++			string strFilename = inffile->path().string();
++#else
+ 			string strFilename = inffile->path().file_string();
++#endif
+ 			string::size_type pos = strFilename.rfind(".inf", strFilename.size(), strlen(".inf"));
+ 
+ 			if (pos == string::npos || strFilename.size() - pos != strlen(".inf"))
+ 				// silently skip files not ending in pos
+ 				continue;
+ 
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++			hr = LoadINF(inffile->path().string().c_str());
++#else
+ 			hr = LoadINF(inffile->path().file_string().c_str());
++#endif
+ 			if (hr != hrSuccess)
+ 				goto exit;
+ 		}
+--- zarafa-7.0.9/provider/libserver/ECSession.cpp		2012-08-03 14:58:34.000000000 +0200
++++ zarafa-7.0.9/provider/libserver/ECSession.cpp.boost150	2012-08-13 01:07:07.000000000 +0200
+@@ -935,7 +935,11 @@
+ 			if (is_directory(key->status()))
+ 				continue;
+ 
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++			lpFileName = key->path().string().c_str();
++#else
+ 			lpFileName = key->path().file_string().c_str();
++#endif
+ 
+ 			biofile = BIO_new_file(lpFileName, "r");
+ 			if (!biofile) {
+--- zarafa-7.0.9/provider/server/ECClientUpdate.cpp		2012-08-03 14:58:32.000000000 +0200
++++ zarafa-7.0.9/provider/server/ECClientUpdate.cpp.boost150	2012-08-13 01:10:13.000000000 +0200
+@@ -357,6 +357,15 @@
+ 
+ 		bfs::directory_iterator update_last;
+ 		for (bfs::directory_iterator update(updatesdir); update != update_last; update++) {
++#if BOOST_VERSION >= 105000 || BOOST_FILESYSTEM_VERSION >= 3
++			std::string strFilename = update->path().filename().string();
++
++			if (!bfs::is_regular_file(*update) && !bfs::is_symlink(*update)) {
++				continue;
++			}
++
++			if (!ba::starts_with(update->path().filename().string(), strFileStart)) {
++#else
+ 			std::string strFilename = update->path().leaf();
+ 
+ 			if (!bfs::is_regular(*update) && !bfs::is_symlink(*update)) {
+@@ -364,6 +373,7 @@
+ 			}
+ 
+ 			if (!ba::starts_with(update->path().leaf(), strFileStart)) {
++#endif
+ 				g_lpLogger->Log(EC_LOGLEVEL_DEBUG, "Client update: trackid: 0x%08X, Ignoring file %s for client update", ulTrackid, strFilename.c_str());
+ 				continue;
+ 			}

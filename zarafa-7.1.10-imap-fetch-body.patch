@@ -1,0 +1,93 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.10 which fixes the RFC-
+violating reply of the Zarafa IMAP gateway in response to a body fetch request. This is
+documented at http://tools.ietf.org/html/rfc3501#page-55. Additionally this has been also
+compared with the Dovecot IMAP server as a nearly (or even de facto) IMAP server reference
+implementation. Please note that this is NOT a duplicate of ZCP-11590/ZCP-11739/ZCP-12365!
+
+Wrong behaviour of Zarafa <= 7.1.10rc1-44973 (without this patch):
+> A4 FETCH 1 (BODY.PEEK[HEADER.FIELDS (FROM FROM)])
+< * 1 FETCH (BODY[HEADER.FIELDS (FROM FROM)] {66}
+From: User1 <user1@domain.org>
+From: User1 <user1@domain.org>
+
+)
+< A4 OK FETCH completed
+
+Comparison with IMAP server Dovecot 2.2.13:
+> A4 FETCH 1 (BODY.PEEK[HEADER.FIELDS (FROM FROM)])
+< * 1 FETCH (BODY[HEADER.FIELDS (FROM FROM)] {34}
+From: User1 <user1@domain.org>
+
+)
+< A4 OK Fetch completed.
+
+Correct behaviour of Zarafa (after having this patch applied):
+> A4 FETCH 1 (BODY.PEEK[HEADER.FIELDS (FROM FROM)])
+< * 1 FETCH (BODY[HEADER.FIELDS (FROM FROM)] {34}
+From: User1 <user1@domain.org>
+
+)
+< A4 OK FETCH completed
+
+Testing: Full IMAP dialog example from the client perspective (after this patch applied):
+< * OK [CAPABILITY IMAP4rev1 LITERAL+ AUTH=PLAIN] Zarafa IMAP gateway ready
+> A0 LOGIN robert robert
+< A0 OK [CAPABILITY IMAP4rev1 LITERAL+ CHILDREN XAOL-OPTION NAMESPACE QUOTA IDLE] LOGIN completed
+> A1 LIST "" INBOX
+< * LIST (\HasNoChildren) "/" "INBOX"
+< A1 OK LIST completed
+> A2 SELECT INBOX
+< * 2 EXISTS
+< * 0 RECENT
+< * FLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)
+< * OK [PERMANENTFLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)] Permanent flags
+< * OK [UIDNEXT 4343] Predicted next UID
+< * OK [UNSEEN 1] First unseen message
+< * OK [UIDVALIDITY 9313] UIDVALIDITY value
+< A2 OK [READ-WRITE] SELECT completed
+> A3 SEARCH UNSEEN ALL
+< * SEARCH 1 2
+< A3 OK SEARCH completed
+> A4 FETCH 1 (BODY.PEEK[HEADER.FIELDS (FROM FROM)])
+< * 1 FETCH (BODY[HEADER.FIELDS (FROM FROM)] {34}
+From: User1 <user1@domain.org>
+
+)
+< A4 OK FETCH completed
+> A5 CLOSE
+< A5 OK CLOSE completed
+> A6 LOGOUT
+< * BYE Zarafa server logging out
+< A6 OK LOGOUT completed
+
+IMPORTANT: This patch has been very carefully and extensively tested but it might not be
+perfect nevertheless as I am not really a C/C++ developer. There should be a code review
+by an experienced C/C++ developer before merging into Zarafa core.
+
+Proposed to upstream via e-mail on Thu, 29 May 2014 01:55:35 +0200, patch was put into the
+upstream ticket https://jira.zarafa.com/browse/ZCP-12398.
+
+--- zarafa-7.1.10/gateway/IMAP.cpp			2014-05-12 12:06:03.000000000 +0200
++++ zarafa-7.1.10/gateway/IMAP.cpp.imap-fetch-body	2014-05-29 00:49:29.000000000 +0200
+@@ -5253,10 +5253,21 @@
+         } else {
+             vector<string> lstReqFields;
+             vector<string>::iterator iterReqField;
++            vector<string>::iterator r, w;
++            set<string> tmpset;
+ 
+             // Get fields as vector
+ 			lstReqFields = tokenize(strFields, " ");
+             
++            // Make elements of vector unique  
++            for(r = lstReqFields.begin(), w = lstReqFields.begin(); r != lstReqFields.end(); ++r) {
++                if(tmpset.insert(*r).second) {
++                    *w++ = *r;
++                }
++            }
++
++            lstReqFields.erase(w, lstReqFields.end());
++
+             // Output headers specified, in order of field set
+             for(iterReqField = lstReqFields.begin(); iterReqField != lstReqFields.end(); iterReqField++) {
+                 for(iterField = lstFields.begin(); iterField != lstFields.end(); iterField++) {

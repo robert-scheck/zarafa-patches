@@ -1,0 +1,59 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.40.0, which adds
+the missing -pthread linking to $CXXFLAGS for the later compile check whether open
+is in -lclucene/libclucene.a. Unfortunately, Fedora was shipping CLucene 0.9.21 so
+far; today the update to the important 0.9.21b happened. If -pthread is not passed
+to $CXXFLAGS, the g++ compiling check fails simply with "undefined reference to
+`pthread_mutexattr_settype'" and "undefined reference to `pthread_mutexattr_init'"
+on Fedora >= 12 and RHEL >= 6.
+
+Beside of that, the -pthread check must be moved before the CLucene check or the
+CLucene check must be moved post -pthread. This patch is completing the previously
+suggested and applied zarafa-6.40.0-clucene.patch.
+
+--- zarafa-6.40.0/configure.ac			2010-06-10 23:12:32.000000000 +0200
++++ zarafa-6.40.0/configure.ac.pthread		2010-06-10 23:54:21.000000000 +0200
+@@ -384,6 +384,14 @@
+ AC_SUBST(ICAL_LIBS)
+ CFLAGS=$cflags_keep
+ 
++# Everything links with pthread
++libs_keep=$LIBS
++# check lib, but do not set in link list
++AC_CHECK_LIB([pthread], [pthread_create],, AC_MSG_ERROR([required library libpthread missing or unusable]))
++LIBS=$libs_keep
++# because it seems this is better... (gnu c/c++ only?)
++CXXFLAGS="$CXXFLAGS -pthread"
++
+ # Check for CLucene availability
+ AC_LANG_PUSH(C++)
+ AC_ARG_WITH(clucene-lib-prefix,
+@@ -397,12 +405,12 @@
+ cxxcpp_keep=$CXXCPP
+ if test "x$CLUCENE_LIB_PREFIX" != "x"; then
+    CFLAGS="$CFLAGS -I$CLUCENE_LIB_PREFIX"
+-   CXXFLAGS="$CFLAGS -I$CLUCENE_LIB_PREFIX"
++   CXXFLAGS="$CFLAGS $CXXFLAGS -I$CLUCENE_LIB_PREFIX"
+    CXXCPP="$CXXCPP -I$CLUCENE_LIB_PREFIX"
+ fi
+ if test "x$CLUCENE_INCLUDE_PREFIX" != "x"; then
+    CFLAGS="$CFLAGS -I$CLUCENE_INCLUDE_PREFIX"
+-   CXXFLAGS="$CFLAGS -I$CLUCENE_INCLUDE_PREFIX"
++   CXXFLAGS="$CFLAGS $CXXFLAGS -I$CLUCENE_INCLUDE_PREFIX"
+    CXXCPP="$CXXCPP -I$CLUCENE_INCLUDE_PREFIX"
+ fi
+ if test -e "${CLUCENE_LIB_PREFIX}/libclucene.a"; then
+@@ -546,14 +554,6 @@
+ LIBS=$libs_keep
+ AC_SUBST(CRYPT_LIBS)
+ 
+-# Everything links with pthread
+-libs_keep=$LIBS
+-# check lib, but do not set in link list
+-AC_CHECK_LIB([pthread], [pthread_create],, AC_MSG_ERROR([required library libpthread missing or unusable]))
+-LIBS=$libs_keep
+-# because it seems this is better... (gnu c/c++ only?)
+-CXXFLAGS="$CXXFLAGS -pthread"
+-
+ # Only specific links with uuid and dl, clients only with crypto and ssl for ssl connections
+ libs_keep=$LIBS
+ AC_CHECK_LIB([crypto], [BIO_accept],, AC_MSG_ERROR([required library libcrypto missing or unusable]))

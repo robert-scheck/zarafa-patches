@@ -1,0 +1,44 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.1.11 which adds anti-loop headers
+for automatic responses by zarafa-autorespond for Microsoft Exchange and all vacation(1) compatible
+implementations.
+
+For the Microsoft Exchange related part useful links are:
+ - http://msdn.microsoft.com/en-us/library/ee219609(v=exchg.80).aspx
+ - https://www.jitbit.com/maxblog/18-detecting-outlook-autoreplyout-of-office-emails-and-x-auto-response-suppress-header/
+
+For vacation(1) compatible implementations useful links are:
+ - http://www.daemon-systems.org/man/vacation.1.html
+ - Book "sendmail" (written by Bryan Costales, Claus Assmann, George Jansen, Gregory Neil Shapiro), ISBN 0596555342
+
+Proposed to upstream via e-mail on Wed, 27 Aug 2014 23:59:58 +0200, patch was put into the upstream
+ticket https://jira.zarafa.com/browse/ZCP-12591.
+
+--- zarafa-7.1.11/spooler/DAgent.cpp				2014-08-24 12:27:06.000000000 +0200
++++ zarafa-7.1.11/spooler/DAgent.cpp.vacation-headers2		2014-08-27 23:52:42.000000000 +0200
+@@ -1469,12 +1469,25 @@
+ 	if (hr != hrSuccess)
+ 		goto exit;
+ 
+-	// add anti-loop header
++	// add anti-loop header for Zarafa
+ 	snprintf(szHeader, PATH_MAX, "\nX-Zarafa-Vacation: autorespond");
+ 	hr = WriteOrLogError(fd, szHeader, strlen(szHeader));
+ 	if (hr != hrSuccess)
+ 		goto exit;
+ 
++	// add anti-loop header for Exchange, see http://msdn.microsoft.com/en-us/library/ee219609(v=exchg.80).aspx
++	snprintf(szHeader, PATH_MAX, "\nX-Auto-Response-Suppress: All");
++	hr = WriteOrLogError(fd, szHeader, strlen(szHeader));
++	if (hr != hrSuccess)
++		goto exit;
++
++	// add anti-loop header for vacation(1) compatible implementations, see section 10.9 of book "sendmail" (written
++	// by Bryan Costales, Claus Assmann, George Jansen, Gregory Neil Shapiro), ISBN 0596555342
++	snprintf(szHeader, PATH_MAX, "\nPrecedence: bulk");
++	hr = WriteOrLogError(fd, szHeader, strlen(szHeader));
++	if (hr != hrSuccess)
++		goto exit;
++
+ 	if (lpMessageProps[3].ulPropTag == PR_SUBJECT_W) {
+ 		// convert as one string because of [] characters
+ 		swprintf(szwHeader, PATH_MAX, L"%ls [%ls]", szSubject, lpMessageProps[3].Value.lpszW);

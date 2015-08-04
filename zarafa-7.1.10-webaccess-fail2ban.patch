@@ -1,0 +1,38 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.0 which logs authentication
+failures of Zarafa WebAccess into the error log of the webserver. This is basically a backport of
+https://jira.zarafa.com/browse/WA-6908 from WebApp to WebAccess. In difference to original patch
+there is no inappropriate space before a punctuation mark also known as "plenken".
+
+The second part of this patch is a backport of Zarafa WebApp 1.6 which ensures that authentication
+is only performed if username and password are filled. This avoids a) strange looking results of
+error_log() from the first part and b) reduces the possible risk of denial of service given that
+PHP is not connecting the Zarafa server if not really needed.
+
+I guess the usage of isset() rather !empty() was accidential because isset() is always true once
+the HTTP POST via the login formular happens.
+
+Proposed to upstream via e-mail on Wed, 13 Aug 2014 22:56:09 +0200, patch was put into the upstream
+ticket https://jira.zarafa.com/browse/ZCP-12543.
+
+--- zarafa-7.1.10/php-webclient-ajax/client/login.php		2014-05-23 15:56:38.000000000 +0200
++++ zarafa-7.1.10/php-webclient-ajax/client/login.php		2014-08-13 22:11:38.000000000 +0200
+@@ -86,6 +86,8 @@
+ 		switch($_SESSION["hresult"]){
+ 			case MAPI_E_LOGON_FAILED:
+ 			case MAPI_E_UNCONFIGURED:
++				// Print error message to error_log of webserver
++				error_log('user '.$_POST["username"].': authentication failure at MAPI');
+ 				echo _("Logon failed, please check your name/password.");
+ 				break;
+ 			case MAPI_E_NETWORK_ERROR:
+--- zarafa-7.1.10/php-webclient-ajax/index.php			2014-05-23 15:56:38.000000000 +0200
++++ zarafa-7.1.10/php-webclient-ajax/index.php			2014-08-13 22:11:11.000000000 +0200
+@@ -153,7 +153,7 @@
+ 
+ 	// Create global mapi object. This object is used in many other files
+ 	$GLOBALS["mapisession"] = new MAPISession();
+-	if (isset($_SESSION["username"]) && isset($_SESSION["password"])) {
++	if (!empty($_SESSION["username"]) && !empty($_SESSION["password"])) {
+ 		$sslcert_file = defined('SSLCERT_FILE') ? SSLCERT_FILE : null;
+ 		$sslcert_pass = defined('SSLCERT_PASS') ? SSLCERT_PASS : null;
+ 		$hresult = $GLOBALS["mapisession"]->logon($_SESSION["username"], $_SESSION["password"], DEFAULT_SERVER, $sslcert_file, $sslcert_pass);

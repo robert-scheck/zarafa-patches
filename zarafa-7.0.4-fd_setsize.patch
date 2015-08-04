@@ -1,0 +1,36 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.0.4, which works around
+the issue that Zarafa is using up to 8192 open file descriptors, while the system glibc is
+allowing at maximum 1024. Of course glibc supports more open file descriptors, however the
+usage seems to be non-POSIX conform and non-portable. Finally a check was implemented into
+glibc by upstream developers to catch such strange usage cases. That check causes Zarafa
+to fail with a segmentation fault when built with -D_FORTIFY_SOURCE=2 and glibc-2.14.90-8
+or newer (actually Fedora 16 with updates and newer).
+
+This patch is a workaround until gSOAP parts are updated/changed/rewritten to use poll(2)
+instead of select(2). Lowering FD_SETSIZE was suggested by Milo Oostergo from Zarafa B.V.
+
+--- zarafa-7.0.4/provider/soap/soapdefs.h		2011-12-22 01:02:31.000000000 +0100
++++ zarafa-7.0.4/provider/soap/soapdefs.h.fd_setsize	2012-01-12 22:36:40.000000000 +0100
+@@ -8,6 +8,6 @@
+ 
+ #include <bits/types.h>
+ #undef __FD_SETSIZE
+-#define __FD_SETSIZE 8192
++#define __FD_SETSIZE 1024
+ 
+ #endif // ndef SOAPDEFS_H_
+--- zarafa-7.0.4/common/platform.h			2011-12-22 01:02:34.000000000 +0100
++++ zarafa-7.0.4/common/platform.h.fd_setsize		2012-01-12 22:37:03.000000000 +0100
+@@ -52,10 +52,10 @@
+ 
+ 
+   // We have to include this now in case select.h is included too soon.
+-  // Increase our maximum amount of file descriptors to 8192
++  // Increase our maximum amount of file descriptors to 1024
+   #include <bits/types.h>
+   #undef __FD_SETSIZE
+-  #define __FD_SETSIZE 8192
++  #define __FD_SETSIZE 1024
+ 
+   // Log the pthreads locks
+   #define DEBUG_PTHREADS 0

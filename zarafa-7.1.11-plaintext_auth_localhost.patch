@@ -1,0 +1,88 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.11 which enhances my earlier
+this year implemented "disable_plaintext_auth" feature (new option in Zarafa >= 7.1.10 to disable
+all plaintext authentications unless SSL/TLS is used), https://jira.zarafa.com/browse/ZCP-12142
+contains the initial implementation and a more verbose feature description.
+
+Given that there are unfortunately still Zarafa systems around using saslauthd without pam_mapi
+but rimap instead the "disable_plaintext_auth" feature prevents them from enabling this option as
+rimap doesn't support SSL/TLS; https://jira.zarafa.com/browse/ZCP-12473 contains an example report
+by a Zarafa customer. Thus this patch adds an exception if the source IPv4 address is "127.0.0.1"
+and allows even if "disable_plaintext_auth" is enabled a cleartext authentication. It was a design
+decision to check only for 127.0.0.1/32 rather 127.0.0.0/8 because there seem to be systems where
+the loopback network except 127.0.0.1/32 is routable?!
+
+Important: The technical implementation of this patch might be not perfect as I am not really a C/
+C++ developer. There should be a code review by an experienced C/C++ developer before merging into
+Zarafa core.
+
+--- zarafa-7.1.11/gateway/IMAP.cpp				2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11/gateway/IMAP.cpp.plaintext_auth_localhost	2014-09-24 01:29:10.000000000 +0200
+@@ -757,7 +757,7 @@
+ 		if (!lpChannel->UsingSsl() && lpChannel->sslctx())
+ 			strCapabilities += " STARTTLS";
+ 
+-		if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0)
++		if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0)
+ 			strCapabilities += " LOGINDISABLED";
+ 		else
+ 			strCapabilities += " AUTH=PLAIN";
+@@ -923,7 +923,7 @@
+ 	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+ 	// If plaintext authentication was disabled any authentication attempt must be refused very soon
+-	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0) {
+ 		hr2 = HrResponse(RESP_TAGGED_NO, strTag, "[PRIVACYREQUIRED] Plaintext authentication disallowed on non-secure "
+ 							 "(SSL/TLS) connections.");
+ 		if (hr2 != hrSuccess)
+@@ -1002,7 +1002,7 @@
+ 	}	
+ 
+ 	// If plaintext authentication was disabled any login attempt must be refused very soon
+-	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0) {
+ 		hr2 = HrResponse(RESP_UNTAGGED, "BAD [ALERT] Plaintext authentication not allowed without SSL/TLS, but your client "
+ 						"did it anyway. If anyone was listening, the password was exposed.");
+ 		if (hr2 != hrSuccess)
+--- zarafa-7.1.11/gateway/POP3.cpp				2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11/gateway/POP3.cpp.plaintext_auth_localhost	2014-09-24 01:30:41.000000000 +0200
+@@ -320,7 +320,7 @@
+ 		if (!lpChannel->UsingSsl() && lpChannel->sslctx())
+ 			strCapabilities += "STLS\r\n";
+ 
+-		if (!(!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0))
++		if (!(!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0))
+ 			strCapabilities += "USER\r\n";
+ 	}
+ 
+@@ -402,7 +402,7 @@
+ 	HRESULT hr = hrSuccess;
+ 	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+-	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0) {
+ 		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Plaintext authentication disallowed on non-secure (SSL/TLS) connections");
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s with username \"%s\" (tried to use disallowed plaintext auth)",
+ 					  lpChannel->GetIPAddress().c_str(), strUser.c_str());
+@@ -431,7 +431,7 @@
+ 	HRESULT hr = hrSuccess;
+ 	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+-	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0 && strcmp(lpChannel->GetIPAddress().c_str(), "127.0.0.1") != 0) {
+ 		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Plaintext authentication disallowed on non-secure (SSL/TLS) connections");
+ 		if(szUser.empty())
+ 			lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s without username (tried to use disallowed "
+--- zarafa-7.1.11/doc/manual.xml				2014-09-03 09:56:28.000000000 +0200
++++ zarafa-7.1.11/doc/manual.xml.plaintext_auth_localhost	2014-10-15 01:22:14.000000000 +0200
+@@ -8024,7 +8024,9 @@
+ 			<term><option>disable_plaintext_auth</option></term>
+ 			<listitem>
+ 			  <para>Disable all plaintext POP3 and IMAP authentications unless
+-			  SSL/TLS is used. Obviously this requires at least
++			  SSL/TLS is used (except for connections originating from
++			  <replaceable>127.0.0.1</replaceable> to allow saslauthd with rimap).
++			  Obviously enabling this configuration option requires at least
+ 			  <replaceable>ssl_private_key_file</replaceable> and
+ 			  <replaceable>ssl_certificate_file</replaceable> to take effect.</para>
+ 			  <para>Default: <replaceable>no</replaceable></para>

@@ -1,0 +1,13 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.30.10, which adds a missing include for
+the later in the code used chmod() command. Without this include, building on Fedora 13 fails.
+
+--- zarafa-6.30.10/provider/server/ECSoapServerConnection.cpp		2010-01-26 17:34:51.000000000 +0100
++++ zarafa-6.30.10/provider/server/ECSoapServerConnection.cpp.chmod	2010-02-06 12:36:22.000000000 +0100
+@@ -51,6 +51,7 @@
+ 
+ #include "ECLogger.h"
+ 
++#include <sys/stat.h>
+ #ifdef HAVE_SYS_UN_H
+ #include <sys/un.h>
+ #endif

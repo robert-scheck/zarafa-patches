@@ -1,0 +1,33 @@
+--- zarafa-6.30.10/mapi4linux/src/m4lguids.cpp		2010-01-26 17:34:48.000000000 +0100
++++ zarafa-6.30.10/mapi4linux/src/m4lguids.cpp.symbol	2010-02-04 09:53:48.459239670 +0100
+@@ -48,6 +48,7 @@
+  */
+ 
+ #include "platform.h"
++/*#ifndef WINCE
+ #define USES_IID_IUnknown
+ #define USES_IID_IStream
+ #define USES_IID_ISequentialStream
+@@ -60,7 +61,8 @@
+ #define USES_IID_IMAPIProp
+ #define USES_IID_IMAPIFolder
+ #define USES_IID_IMAPITable
++#endif
+ #include <initguid.h>
+-
++*/
+ #include "mapiguid.h"
+ #include "m4l.mapiutil.h"
+--- zarafa-6.30.10/mapi4linux/src/Makefile.am		2010-01-26 12:05:22.000000000 +0100
++++ zarafa-6.30.10/mapi4linux/src/Makefile.am.symbol	2010-02-04 09:51:39.285239878 +0100
+@@ -3,7 +3,9 @@
+ AM_CPPFLAGS = $(DEBUGFLAGS) -DLINUX -I$(top_srcdir)/mapi4linux/include -I$(top_srcdir)/provider/common -I${top_srcdir}/common -I${top_srcdir}/libfreebusy
+ AM_LDFLAGS = $(DL_LIBS) -export-symbols ${top_srcdir}/mapi4linux/src/mapi-exports.sym
+ 
+-libmapi_la_LIBADD = ${top_builddir}/common/libcommon_util.la
++libmapi_la_LIBADD = ${top_builddir}/common/libcommon_util.la \
++                                       ${top_builddir}/common/libcommon_mapi.la \
++                                       $(PROG_LIBS)
+ 
+ # required because we're exporting extern "C" functions and want to filter with 'export-symbols'
+ CXXLD=--tag=none gcc

@@ -1,0 +1,58 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.1.10 which fixes the fix that fixes CVE-2014-0103. Ush,
+that was complicated, so: CVE-2014-0103 exists because Zarafa WebAccess < 7.1.10 and Zarafa WebApp < 1.6 storing passwords
+in cleartext on server (in the PHP session). Zarafa solved this flaw by using openssl_encrypt() and openssl_decrypt() from
+PHP's OpenSSL bindings. However these functions are only available in PHP 5.3 or later. Without this patch suggestion, any
+older but still supported Linux distribution like Red Hat Enterprise Linux 5 or SuSE Linux Enterprise Server 10 (which are
+both shipping PHP < 5.3 by default) would still be left vulnerable.
+
+Given that I am personally more a fan of OpenSSL rather mcrypt, I am not absolutely sure if this implementation is really
+correct even it works fine on my test system. So please explicitly review this code to avoid introducing another security
+flaw by trying to fix one! A thing that I generally question for myself is the usage of "des-ede3-cbc"/"MCRYPT_TRIPLEDES"
+instead of e.g. MCRYPT_RIJNDAEL_128. Given that this decision was initially made by Zarafa I am just following that here.
+
+Important: To get this patch really powerful the install-time requirement needs to be adapted like this (this example is
+based on Fedora's build system so the macros %{?rhel} and %{?fedora} might not exist at Zarafa but need to be replaced by
+other macros):
+
+%if 0%{?rhel}%{?fedora} < 6
+Requires: php-mcrypt
+%else
+Requires: php-openssl
+%endif
+
+This requires php-openssl (provided by php-common) on RHEL 6 (and later) and php-mcrypt (separate package) before RHEL 6.
+
+Proposed to upstream via e-mail on Thu, 5 Jun 2014 00:24:32 +0200, patch was put into the (non-disclosed) upstream ticket
+https://jira.zarafa.com/browse/ZCP-12407.
+
+--- zarafa-7.1.10/php-webclient-ajax/index.php						2014-05-23 15:56:38.000000000 +0200
++++ zarafa-7.1.10/php-webclient-ajax/index.php.webaccess-mcrypt				2014-06-05 00:08:18.000000000 +0200
+@@ -135,6 +135,8 @@
+ 		// if user has openssl module installed
+ 		if(function_exists("openssl_encrypt")) {
+ 			$_SESSION['password'] = openssl_encrypt($password,"des-ede3-cbc",PASSWORD_KEY,0,PASSWORD_IV);
++		} elseif(function_exists("mcrypt_encrypt")) {
++			$_SESSION['password'] = base64_encode(mcrypt_encrypt(MCRYPT_TRIPLEDES, PASSWORD_KEY, $password, MCRYPT_MODE_CBC, PASSWORD_IV));
+ 		} else {
+ 			$_SESSION["password"] = $password;
+ 		}
+--- zarafa-7.1.10/php-webclient-ajax/server/core/class.mapisession.php			2014-05-23 15:56:38.000000000 +0200
++++ zarafa-7.1.10/php-webclient-ajax/server/core/class.mapisession.php.webaccess-mcrypt	2014-06-05 00:08:57.000000000 +0200
+@@ -132,6 +132,8 @@
+ 			if(is_string($username) && is_string($password)) {
+ 				if(function_exists("openssl_decrypt")) {
+ 					$password = openssl_decrypt($password,"des-ede3-cbc",PASSWORD_KEY,0,PASSWORD_IV);
++				} elseif(function_exists("mcrypt_decrypt")) {
++					$password = trim(mcrypt_decrypt(MCRYPT_TRIPLEDES, PASSWORD_KEY, base64_decode($password), MCRYPT_MODE_CBC, PASSWORD_IV));
+ 				}
+ 				// logon
+ 				$this->session = mapi_logon_zarafa($username, $password, $server, $sslcert_file, $sslcert_pass);
+@@ -139,6 +141,8 @@
+ 
+ 				if(function_exists("openssl_encrypt")) {
+ 					$password = openssl_encrypt($password,"des-ede3-cbc",PASSWORD_KEY,0,PASSWORD_IV);
++				} elseif(function_exists("mcrypt_encrypt")) {
++					$password = base64_encode(mcrypt_encrypt(MCRYPT_TRIPLEDES, PASSWORD_KEY, $password, MCRYPT_MODE_CBC, PASSWORD_IV));
+ 				}
+ 
+ 				if ($result == NOERROR && $this->session !== false){
