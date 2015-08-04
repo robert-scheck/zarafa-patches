@@ -1,0 +1,25 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.0.7, which makes hex2bin() conditional, because
+PHP >= 5.4 provides an internal hex2bin() implementation, while older PHP versions don't. Without this, PHP 5.4
+fails: PHP Fatal error: Cannot redeclare hex2bin() in /usr/share/zarafa-webaccess/server/core/class.conversion.php
+on line 1251.
+
+--- zarafa-7.0.7/php-webclient-ajax/server/core/class.conversion.php		2012-05-03 16:37:15.000000000 +0200
++++ zarafa-7.0.7/php-webclient-ajax/server/core/class.conversion.php.php54	2012-05-21 01:46:22.000000000 +0200
+@@ -1243,11 +1243,15 @@
+ 
+ /**
+ * Shortcut to Conversion::hex2bin
++* Complementary function to bin2hex() which converts a hex entryid to a binary entryid.
++* Since PHP 5.4 an internal hex2bin() implementation is available.
+ * @see Conversion::hex2bin()
+ */
+ 
+-function hex2bin($data) {
+-	return Conversion::hex2bin($data);
++if (!function_exists("hex2bin")) {
++	function hex2bin($data) {
++		return Conversion::hex2bin($data);
++	}
+ }
+ 
+ /**

@@ -1,0 +1,14 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.0.0, which solves the make failure
+"error: 'string' was not declared in this scope" on Fedora 16 (Rawhide) using GCC 4.6.0.
+
+--- zarafa-7.0.0/ECtools/zarafa-indexer/ECSearcherRequest.cpp		2011-06-10 03:37:37.000000000 +0200
++++ zarafa-7.0.0/ECtools/zarafa-indexer/ECSearcherRequest.cpp.cpp_std	2011-06-26 19:42:15.000000000 +0200
+@@ -153,7 +153,7 @@
+ 	}
+ 
+ 	while (!m_lpThreadData->bShutdown) {
+-		string strLine;
++		std::string strLine;
+ 		command_t ulCommand;
+ 		std::vector<std::string> listArgs;
+ 		std::string strResponse;

@@ -1,0 +1,96 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.30.4, which allows environment
+overrides in the initscripts for Zarafa only. It's patch ticket #4951 (patch: Zarafa-only environment
+overrides in the initscripts), but not for Fedora, but for openSUSE and SLES. Same LSB conform like
+Red Hat and Fedora, so the patch should get applied here, too.
+
+--- zarafa-6.30.4/installer/linux/zarafa-gateway.init.suse		2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-gateway.init.suse.sysconfig	2009-10-24 21:21:18.000000000 +0200
+@@ -26,6 +26,10 @@
+ GATEWAYCONFIG_OPT=""
+ [ ! -z $GATEWAYCONFIG -a -f $GATEWAYCONFIG ] && GATEWAYCONFIG_OPT="-c $GATEWAYCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ gateway=`basename $GATEWAYPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.30.4/installer/linux/zarafa-dagent.init.suse		2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-dagent.init.suse.sysconfig	2009-10-24 21:21:37.000000000 +0200
+@@ -30,6 +30,10 @@
+ DAGENTCONFIG_OPT="-d"
+ [ ! -z $DAGENTCONFIG -a -f $DAGENTCONFIG ] && DAGENTCONFIG_OPT="$DAGENTCONFIG_OPT -c $DAGENTCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ dagent=`basename $DAGENTPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.30.4/installer/linux/zarafa-ical.init.suse			2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-ical.init.suse.sysconfig	2009-10-24 21:21:52.000000000 +0200
+@@ -26,6 +26,10 @@
+ ICALCONFIG_OPT=""
+ [ ! -z $ICALCONFIG -a -f $ICALCONFIG ] && ICALCONFIG_OPT="-c $ICALCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ ical=`basename $ICALPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.30.4/installer/linux/zarafa-server.init.suse		2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-server.init.suse.sysconfig	2009-10-24 21:22:06.000000000 +0200
+@@ -25,6 +25,10 @@
+ SERVERCONFIG_OPT=""
+ [ ! -z $SERVERCONFIG -a -f $SERVERCONFIG ] && SERVERCONFIG_OPT="-c $SERVERCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ server=`basename $SERVERPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.30.4/installer/linux/zarafa-spooler.init.suse		2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-spooler.init.suse.sysconfig	2009-10-24 21:22:20.000000000 +0200
+@@ -27,6 +27,10 @@
+ SPOOLERCONFIG_OPT=""
+ [ ! -z $SPOOLERCONFIG -a -f $SPOOLERCONFIG ] && SPOOLERCONFIG_OPT="-c $SPOOLERCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ spooler=`basename $SPOOLERPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.30.4/installer/linux/zarafa-monitor.init.suse		2009-10-16 15:56:00.000000000 +0200
++++ zarafa-6.30.4/installer/linux/zarafa-monitor.init.suse.sysconfig	2009-10-24 21:22:38.000000000 +0200
+@@ -27,6 +27,10 @@
+ MONITORCONFIG_OPT=""
+ [ ! -z $MONITORCONFIG -a -f $MONITORCONFIG ] && MONITORCONFIG_OPT="-c $MONITORCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ monitor=`basename $MONITORPROGRAM`
+ 
+ case "$1" in
+--- zarafa-6.40.0/installer/linux/zarafa-indexer.init.suse		2009-09-20 17:29:51.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-indexer.init.suse.sysconfig	2009-10-24 21:26:12.000000000 +0200
+@@ -25,6 +25,10 @@
+ INDEXERCONFIG_OPT=""
+ [ ! -z $INDEXERCONFIG -a -f $INDEXERCONFIG ] && INDEXERCONFIG_OPT="-c $INDEXERCONFIG"
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ indexer=`basename $INDEXERPROGRAM`
+ 
+ case "$1" in

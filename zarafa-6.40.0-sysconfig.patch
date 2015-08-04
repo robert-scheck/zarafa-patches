@@ -1,0 +1,109 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.30.3, which sources a separate file,
+/etc/sysconfig/zarafa, if it exists. This allows e.g. administrators to have the system still at LANG=C
+while Zarafa is run with e.g. LANG=de_DE to get German folder names per default (e.g. in LDAP setups or
+for the "Inbox - Firstname Lastname" folder).
+
+--- zarafa-6.40.0/installer/linux/zarafa-ical.init.fc			2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-ical.init.fc.sysconfig		2009-10-15 21:36:58.000000000 +0200
+@@ -34,6 +34,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ ical=`basename $ICALPROGRAM`
+ lockfile=/var/lock/subsys/$ical
+--- zarafa-6.40.0/installer/linux/zarafa-licensed.init.fc		2009-10-15 21:41:00.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-licensed.init.fc.sysconfig	2009-10-15 21:41:31.000000000 +0200
+@@ -36,6 +36,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ licensed=`basename $LICENSEDPROGRAM`
+ lockfile=/var/lock/subsys/$licensed
+--- zarafa-6.40.0/installer/linux/zarafa-dagent.init.fc			2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-dagent.init.fc.sysconfig	2009-10-15 21:37:59.000000000 +0200
+@@ -39,6 +39,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ dagent=`basename $DAGENTPROGRAM`
+ lockfile=/var/lock/subsys/$dagent
+--- zarafa-6.40.0/installer/linux/zarafa-gateway.init.fc		2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-gateway.init.fc.sysconfig	2009-10-15 21:38:11.000000000 +0200
+@@ -34,6 +34,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ gateway=`basename $GATEWAYPROGRAM`
+ lockfile=/var/lock/subsys/$gateway
+--- zarafa-6.40.0/installer/linux/zarafa-indexer.init.fc		2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-indexer.init.fc.sysconfig	2009-10-15 21:38:27.000000000 +0200
+@@ -32,6 +32,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ indexer=`basename $INDEXERPROGRAM`
+ lockfile=/var/lock/subsys/$indexer
+--- zarafa-6.40.0/installer/linux/zarafa-server.init.fc			2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-server.init.fc.sysconfig	2009-10-15 21:38:42.000000000 +0200
+@@ -30,6 +30,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ server=`basename $SERVERPROGRAM`
+ lockfile=/var/lock/subsys/$server
+--- zarafa-6.40.0/installer/linux/zarafa-spooler.init.fc		2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-spooler.init.fc.sysconfig	2009-10-15 21:38:56.000000000 +0200
+@@ -34,6 +34,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ spooler=`basename $SPOOLERPROGRAM`
+ lockfile=/var/lock/subsys/$spooler
+--- zarafa-6.40.0/installer/linux/zarafa-monitor.init.fc		2009-09-13 22:20:50.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-monitor.init.fc.sysconfig	2009-10-15 21:39:15.000000000 +0200
+@@ -34,6 +34,10 @@
+ # Source function library.
+ . /etc/rc.d/init.d/functions
+ 
++if [ -f /etc/sysconfig/zarafa ]; then
++	. /etc/sysconfig/zarafa
++fi
++
+ RETVAL=0
+ monitor=`basename $MONITORPROGRAM`
+ lockfile=/var/lock/subsys/$monitor

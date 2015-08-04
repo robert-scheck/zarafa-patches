@@ -1,0 +1,76 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.30.4, which sources a separate file,
+/etc/sysconfig/zarafa, if it exists. This allows e.g. administrators to have the system still at LANG=C
+while Zarafa is run with e.g. LC_MESSAGES=de_DE to get German folder names per default.
+
+--- zarafa-6.30.4/installer/userscripts/createuser.in			2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/createuser.in.sysconfig		2009-10-24 21:04:06.000000000 +0200
+@@ -9,5 +9,9 @@
+ # beware that this string can contain any characters, so take heed to
+ # correct quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_USER_SCRIPTS=@USERSCRIPTDIR@/createuser.d
+ . @USERSCRIPTDIR@/users_common.sh
+--- zarafa-6.30.4/installer/userscripts/creategroup.in			2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/creategroup.in.sysconfig	2009-10-24 21:04:14.000000000 +0200
+@@ -9,5 +9,9 @@
+ # beware that this string can contain any characters, so take heed to
+ # correct quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_GROUP_SCRIPTS=@USERSCRIPTDIR@/creategroup.d
+ . @USERSCRIPTDIR@/groups_common.sh
+--- zarafa-6.30.4/installer/userscripts/createcompany.in		2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/createcompany.in.sysconfig	2009-10-24 21:04:24.000000000 +0200
+@@ -9,5 +9,9 @@
+ # beware that this string can contain any characters, so take heed to
+ # correct quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_COMPANY_SCRIPTS=@USERSCRIPTDIR@/createcompany.d
+ . @USERSCRIPTDIR@/companies_common.sh
+--- zarafa-6.30.4/installer/userscripts/deleteuser.in			2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/deleteuser.in.sysconfig		2009-10-24 21:04:33.000000000 +0200
+@@ -9,5 +9,9 @@
+ # that this string can contain any characters, so take heed to correct
+ # quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_USER_SCRIPTS=@USERSCRIPTDIR@/deleteuser.d
+ . @USERSCRIPTDIR@/users_common.sh
+--- zarafa-6.30.4/installer/userscripts/deletegroup.in			2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/deletegroup.in.sysconfig	2009-10-24 21:04:49.000000000 +0200
+@@ -9,5 +9,9 @@
+ # beware that this string can contain any characters, so take heed to
+ # correct quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_GROUP_SCRIPTS=@USERSCRIPTDIR@/deletegroup.d
+ . @USERSCRIPTDIR@/groups_common.sh
+--- zarafa-6.30.4/installer/userscripts/deletecompany.in		2009-10-16 15:55:59.000000000 +0200
++++ zarafa-6.30.4/installer/userscripts/deletecompany.in.sysconfig	2009-10-24 21:05:01.000000000 +0200
+@@ -9,5 +9,9 @@
+ # beware that this string can contain any characters, so take heed to
+ # correct quoting.
+ 
++if [ -f @sysconfdir@/sysconfig/zarafa ]; then
++  . @sysconfdir@/sysconfig/zarafa
++fi
++
+ ZARAFA_COMPANY_SCRIPTS=@USERSCRIPTDIR@/deletecompany.d
+ . @USERSCRIPTDIR@/companies_common.sh

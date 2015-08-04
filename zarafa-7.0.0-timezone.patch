@@ -1,0 +1,68 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.0.0, which changes the timezone
+configuration and handling to be more flexible and use PHP global configuration value if possible.
+
+Trivia: PHP expects a timezone identifier which is used by all PHP date/time functions in a script;
+if none timezone identifier is set, PHP guesses and raises a warning. The timezone identifier can
+be set via date.timezone in php.ini or via date_default_timezone_set(), the TZ environment variable
+is no longer evaluated since PHP 5.3. A timezone identifier set via date_default_timezone_set() is
+always more specific and thus overrides date.timezone in php.ini.
+
+Zarafa's regular behaviour is to override the default PHP timezone identifier via date.timezone in
+php.ini always, even if the user might have a proper PHP timezone identifier configuration already.
+
+What does this mean? Normally you have the same timezone for everything on your system, let us say
+it is "Europe/Berlin". If I am a good server administrator, I configuring in e.g. /etc/php.ini the
+option 'date.timezone = "Europe/Berlin"' once and every PHP-using application should be happy. But
+in the case of Zarafa, I have to configure this a second time, because the Zarafa WebAccess config
+is overriding always to "Europe/London" (which is something like UTC). And yes, there are many lazy
+server administrators which do not care about the global PHP configuration in /etc/php.ini at all;
+they just install Zarafa WebAccess and care about the WebAccess setting in config.php.
+
+And here comes my patch to make both, well-behaving and lazy system administrators, happy. It works
+this way:
+
+Is the constant "TIMEZONE" in config.php set to something non-empty?
+  Yes) Use the given timezone identifier, because it is the most specific override and fine
+  No) Is date.timezone in /etc/php.ini set to something non-empty?
+    Yes) Use the timezone identifier from /etc/php.ini, because of a well-behaving administrator
+    No) Set the default 'Europe/London' to avoid PHP warnings and to have Zarafa working anyway
+
+This patch is backwards compatible, so everybody who is a same lazy administrator further on, will
+not notice any change or breakage. But this patch allows me (as a downstream) to remove our current
+hackish patch and helps me to not touch the default configuration. Fedora tries to deliver packages
+which are able to run with no configuration if possible. Having a hardcoded (likely wrong) timezone
+brings up the configuration need to the user, which can be really avoid by this patch.
+
+--- zarafa-7.0.0/php-webclient-ajax/config.php.dist		2011-06-21 20:42:19.000000000 +0200
++++ zarafa-7.0.0/php-webclient-ajax/config.php.dist.timezone	2011-07-29 21:02:50.000000000 +0200
+@@ -156,10 +156,8 @@
+ 		define('LANG', 'en_EN'); // default fallback language
+ 	}
+ 
+-	// Defines the default time zone
+-	if (function_exists("date_default_timezone_set")){
+-		date_default_timezone_set("Europe/London");
+-	}
++	// Defines the default time zone, change e.g. to "Europe/London" when needed
++	define('TIMEZONE', '');
+ 
+ 
+ 	/**************************************\
+--- zarafa-7.0.0/php-webclient-ajax/index.php			2011-06-22 00:02:22.000000000 +0200
++++ zarafa-7.0.0/php-webclient-ajax/index.php.timezone		2011-07-29 21:03:46.000000000 +0200
+@@ -69,6 +69,15 @@
+ 	ob_start();
+ 	setlocale(LC_CTYPE, "en_US.UTF-8");
+ 
++	// Set timezone
++	if(function_exists("date_default_timezone_set")) {
++		if(defined('TIMEZONE') ? constant('TIMEZONE') : false) {
++			date_default_timezone_set(TIMEZONE);
++		} else if(!ini_get('date.timezone')) {
++			date_default_timezone_set('Europe/London');
++		}
++	}
++
+ 	// Start the session
+ 	session_name(COOKIE_NAME);
+ 

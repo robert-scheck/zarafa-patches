@@ -1,0 +1,10 @@
+--- zcp-source-7.0.0beta2-24874/php-ext/main.cpp		2011-01-21 00:07:33.000000000 +0100
++++ zcp-source-7.0.0beta2-24874/php-ext/main.cpp.cpp-endif	2011-01-23 00:32:22.121821503 +0100
+@@ -7392,6 +7392,6 @@
+         RETVAL_TRUE;
+     }
+     
+-exit:
+     return;
+ }
++#endif

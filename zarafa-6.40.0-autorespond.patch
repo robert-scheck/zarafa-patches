@@ -1,0 +1,70 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.40.0 which makes zarafa-autorespond more
+flexible and configurable:
+
+ - ZARAFA_AUTORESPOND_TIMELIMIT allows to specify an own timelimit rather the default 24 hours in seconds
+   or with multiplication, e.g. "24*60*60*7"
+ - ZARAFA_AUTORESPOND_DB allows to specify an own path for vacation database, e.g. "/foo/zarafa-vacation-"
+ - ZARAFA_AUTORESPOND_SENDMAIL allows to specify an own sendmail call including all parameters, this makes
+   sense in case of e-mail signature scripts, e.g. "/usr/local/bin/signatures.pl -f \"$FROM\" -t". Note,
+   that it is mandatory for some scripts to have a flexible order of parameters etc. so just making the
+   /usr/sbin/sendmail call configurable helps in some cases but not in mine. This is why I made the whole
+   call including parameters configurable.
+
+This patch moves the vacation database from "/tmp" to "/var/lib/zarafa/autorespond" to be more conform to
+LSB, because the vacation database is variable data not just temporary data (/tmp can be emptied during a
+reboot or shutdown, this would give negative experience to users). Of course this patch requires a mkdir
+call somewhere to create /var/lib/zarafa/autorespond directory. Using just /var/lib/zarafa whould be some
+security risk, as special directory permissions are required. Add the following to the RPM *.spec file to
+get it fully working:
+
+%dir %attr(0755,%{name},%{name}) %{_localstatedir}/lib/%{name}/
+%dir %attr(1777,%{name},%{name}) %{_localstatedir}/lib/%{name}/autorespond/
+
+--- zarafa-6.40.0/installer/linux/zarafa-autorespond			2010-01-25 15:42:59.000000000 +0100
++++ zarafa-6.40.0/installer/linux/zarafa-autorespond.autorespond	2010-02-14 03:42:13.000000000 +0100
+@@ -6,10 +6,14 @@
+ USER=$4
+ MSG=$5
+ 
+-# do not send for next 24 hours
+-TIMELIMIT=$[24*60*60]
+-SENDDB=${TMP:-/tmp}/zarafa-vacation-$USER.db
+-SENDDBTMP=${TMP:-/tmp}/zarafa-vacation-$USER.tmp
++if [ -f /etc/sysconfig/zarafa ]; then
++    . /etc/sysconfig/zarafa;
++fi
++
++# do not send for next N hours (default: 24 hours)
++TIMELIMIT=$[${ZARAFA_AUTORESPOND_TIMELIMIT:-24*60*60}]
++SENDDB=${ZARAFA_AUTORESPOND_DB:-/var/lib/zarafa/autorespond/}$USER.db
++SENDDBTMP=${ZARAFA_AUTORESPOND_DB:-/var/lib/zarafa/autorespond/}$USER.tmp
+ 
+ # Subject is required
+ if [ -z "$SUBJECT" ]; then
+@@ -54,4 +58,4 @@
+ mv "$SENDDBTMP" "$SENDDB" 2>/dev/null
+ echo $TIMESTAMP "$TO" >> "$SENDDB" 2>/dev/null
+ 
+-/usr/sbin/sendmail -t -f "$FROM" < "$MSG"
++${ZARAFA_AUTORESPOND_SENDMAIL:-/usr/sbin/sendmail -t -f "$FROM"} < "$MSG"
+--- zarafa-6.40.0/installer/linux/sysconfig.rhel			2010-01-25 15:42:59.000000000 +0100
++++ zarafa-6.40.0/installer/linux/sysconfig.rhel.autorespond		2010-02-14 03:53:28.000000000 +0100
+@@ -37,3 +37,18 @@
+ # Locale setting for zarafa services
+ #
+ ZARAFA_LOCALE="C"
++
++#
++# Full alternative path for vacation database
++#
++ZARAFA_AUTORESPOND_DB=""
++
++#
++# Alternative timelimit for vacation in seconds
++#
++ZARAFA_AUTORESPOND_TIMELIMIT=""
++
++#
++# Alternative sendmail invocation including parameters
++#
++ZARAFA_AUTORESPOND_SENDMAIL=""

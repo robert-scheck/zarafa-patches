@@ -1,0 +1,42 @@
+Re-merged patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.40.0, which corrects
+the linking between the libraries. Without this patch, any PHP usage causes the PHP error message
+"undefined symbol: _ZN10ECMemTable6CreateEP14_SPropTagArrayjPPS_". The second hunk is required to
+avoid linking errors like "(.rodata+0x0): multiple definition of `IID_IUnknown'". This patch was
+originally by Michel de Ron (Zarafa); http://forums.zarafa.com/viewtopic.php?f=1&t=2418&start=15
+is providing some more details and information.
+
+--- zarafa-6.40.0/mapi4linux/src/Makefile.am			2010-05-31 15:44:42.000000000 +0200
++++ zarafa-6.40.0/mapi4linux/src/Makefile.am.undefined-symbol	2010-06-08 22:32:12.000000000 +0200
+@@ -3,7 +3,9 @@
+ AM_CPPFLAGS = $(DEBUGFLAGS) -DLINUX -I$(top_srcdir)/mapi4linux/include -I$(top_srcdir)/provider/common -I${top_srcdir}/common -I${top_srcdir}/libfreebusy
+ AM_LDFLAGS = $(DL_LIBS) -export-symbols ${top_srcdir}/mapi4linux/src/mapi-exports.sym
+ 
+-libmapi_la_LIBADD = ${top_builddir}/common/libcommon_util.la
++libmapi_la_LIBADD = ${top_builddir}/common/libcommon_util.la \
++	${top_builddir}/common/libcommon_mapi.la \
++	$(PROG_LIBS)
+ 
+ # required because we're exporting extern "C" functions and want to filter with 'export-symbols'
+ CXXLD=--tag=none gcc
+--- zarafa-6.40.0/mapi4linux/src/m4lguids.cpp			2010-05-31 19:28:56.000000000 +0200
++++ zarafa-6.40.0/mapi4linux/src/m4lguids.cpp.undefined-symbol	2010-06-08 22:47:30.000000000 +0200
+@@ -48,19 +48,5 @@
+  */
+ 
+ #include "platform.h"
+-#define USES_IID_IUnknown
+-#define USES_IID_IStream
+-#define USES_IID_ISequentialStream
+-#define USES_IID_IProfAdmin
+-#define USES_IID_IProviderAdmin
+-#define USES_IID_IMAPIAdviseSink
+-#define USES_IID_IMsgServiceAdmin
+-#define USES_IID_IProfSect
+-#define USES_IID_IMAPISession
+-#define USES_IID_IMAPIProp
+-#define USES_IID_IMAPIFolder
+-#define USES_IID_IMAPITable
+-#include <initguid.h>
+-
+ #include "mapiguid.h"
+ #include "m4l.mapiutil.h"

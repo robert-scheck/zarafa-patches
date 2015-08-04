@@ -1,0 +1,28 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.40.0, which allows to override some
+settings of zarafa-autorespond afterwards rather requiring the administrator to set all settings in the
+external file (even the defaults). Sane Linux behaviour is, that only non-default values should be set;
+that's why the userspecific configuration file /etc/zarafa/autorespond needs to be sourced afterwards.
+
+--- zarafa-6.40.0/installer/linux/zarafa-autorespond			2010-04-14 17:01:00.000000000 +0200
++++ zarafa-6.40.0/installer/linux/zarafa-autorespond.autorespond	2010-04-19 03:19:48.000000000 +0200
+@@ -6,9 +6,6 @@
+ USER=$4
+ MSG=$5
+ 
+-if [ -r /etc/zarafa/autorespond ]; then
+-	. /etc/zarafa/autorespond
+-else
+ # defaults
+ AUTORESPOND_CC=0
+ AUTORESPOND_NORECIP=0
+@@ -17,6 +14,10 @@
+ SENDDBTMP=${TMP:-/tmp}/zarafa-vacation-$USER-$$.tmp
+ SENDMAILCMD=/usr/sbin/sendmail
+ SENDMAILPARAMS="-t -f"
++
++# Override defaults if needed
++if [ -r /etc/zarafa/autorespond ]; then
++	. /etc/zarafa/autorespond
+ fi
+ 
+ # Check whether we want to respond to the message

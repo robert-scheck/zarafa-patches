@@ -1,0 +1,44 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.40.1, which just
+removes a wrong variable assignment. Having this assignment, ./configure at LDAP
+section (which is directly after the CLucene one), looks like this:
+
+> checking ldap.h usability... yes
+> checking ldap.h presence... no
+> checking for ldap.h... configure: WARNING: ldap.h: accepted by the compiler, rejected by the preprocessor!
+> configure: WARNING: ldap.h: proceeding with the compiler's result
+> yes
+> checking for -lldap without LDAP_DEPRECATED... yes
+> checking for ldap_start_tls_s... yes
+
+The config.log file is telling the following:
+
+> configure:23742: checking ldap.h usability
+> configure:23759: g++ -c -O2 -g -pipe -m64 -fPIC -g -rdynamic -Wall -Wno-write-strings  -pedantic -Wno-long-long   -I/usr/lib64 -I/usr/include conftest.cpp >&5
+> configure:23765: $? = 0
+> configure:23779: result: yes
+> configure:23783: checking ldap.h presence
+> configure:23798:   -I/usr/lib64 -I/usr/include conftest.cpp
+> ./configure: line 23799: -I/usr/lib64: No such file or directory
+> configure:23804: $? = 127
+
+After applying this patch, the ./configure looks like this:
+
+> checking ldap.h usability... yes
+> checking ldap.h presence... yes
+> checking for ldap.h... yes
+> checking for -lldap without LDAP_DEPRECATED... no
+> checking for -lldap with LDAP_DEPRECATED... yes
+> checking for ldap_start_tls_s... yes
+
+No warnings because of wrongly introduced CXXCPP flags anymore.
+
+--- zarafa-6.40.1/configure.ac			2010-08-08 14:32:33.000000000 +0200
++++ zarafa-6.40.1/configure.ac.ldap_cxxcpp	2010-08-08 17:29:28.000000000 +0200
+@@ -432,7 +432,6 @@
+ AC_SUBST(CLUCENE_CFLAGS)
+ AC_SUBST(CLUCENE_LIBS)
+ CXXFLAGS=$cxxflags_keep
+-CXXCPP=$cxxcpp_keep
+ AC_LANG_POP
+ 
+ # Check for google perftools tcmalloc availability

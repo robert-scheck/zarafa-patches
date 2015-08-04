@@ -1,0 +1,60 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.30.3, which adds
+the ability to detect libvmime07 as packaged in Fedora. The main problem is, that
+Zarafa depends on an old outdated libvmime package being API incompatible to newer
+versions. Fedora ships libvmime 0.9.x and libvmime07 0.7.1 for parallel installs.
+
+If /usr/include/libvmime07 exists, it is preferred over /usr/include. Zarafa itself
+ships /usr/include, which works further on. This patch makes Zarafa on Fedora and
+RHEL/CentOS/EPEL easily compilable: "yum install libvmime07-devel libical-devel";
+afterwards a "./configure" at Zarafa (if all other usual dependencies are already
+satisfied).
+
+CPPFLAGS and CXXFLAGS are NOT the same. CPPFLAGS are the preprocessor flags, while
+CXXFLAGS are for the GNU C++ Compiler only. The GNU C++ Compiler inherits CPPFLAGS
+into CXXFLAGS while CXXFLAGS are not inherited into CPPFLAGS. And ./configure needs
+CPPFLAGS on Fedora, because otherwise the -I/usr/include/libvmime07 test with the
+AC_CHECK_HEADERS() fails as preprocessor tests ignore CXXFLAGS. If you see trouble
+with that, set both, CPPFLAGS _and_ CXXFLAGS to the same values. According to the
+GNU GCC people, CPPFLAGS only should work anywhere and everywhere.
+
+--- zarafa-6.30.3/configure.ac			2009-10-15 00:57:07.000000000 +0200
++++ zarafa-6.30.3/configure.ac.libvmime07	2009-10-15 20:34:27.000000000 +0200
+@@ -288,26 +288,32 @@
+ # check user given vmime location
+ AC_ARG_WITH(vmime-prefix,
+   AC_HELP_STRING([--with-vmime-prefix=PATH],[path to the vmime include files, e.g. /usr/local/include]),
+-  [VMIME_PREFIX=${withval}],[VMIME_PREFIX=/usr/include])
++  [VMIME_PREFIX=${withval}],[VMIME_PREFIX=/usr/include/libvmime07],[VMIME_PREFIX=/usr/include])
+ 
+ # Checks for libvmime (C++)
+ AC_LANG_PUSH(C++)
+-cxxflags_keep=$CXXFLAGS
++cppflags_keep=$CPPFLAGS
+ if test "x$VMIME_PREFIX" != "x"; then
+-  CXXFLAGS="$CXXFLAGS -I$VMIME_PREFIX"
++  CPPFLAGS="$CPPFLAGS -I$VMIME_PREFIX"
+ fi
+ AC_CHECK_HEADERS([vmime/messaging/session.hpp],
+   [
+-	dnl assume defaults
+-	VMIME_CFLAGS=-I$VMIME_PREFIX
++     dnl assume defaults
++     VMIME_CFLAGS=-I$VMIME_PREFIX
++
++     dnl Fedora ships libvmime 0.7.1 as libvmime07
++     if test "x$VMIME_PREFIX" = "x/usr/include/libvmime07"; then
++	VMIME_LIBS="-lvmime07"
++     else
+ 	VMIME_LIBS="-lvmime"
++     fi
+   ],[
+     dnl	header not found on system, try with pkgconfig (watch the [] quotes)
+ 	PKG_CHECK_MODULES(VMIME, vmime = 0.7.1)
+   ])
+ AC_SUBST(VMIME_CFLAGS)
+ AC_SUBST(VMIME_LIBS)
+-CXXFLAGS=$cxxflags_keep
++CPPFLAGS=$cppflags_keep
+ AC_LANG_POP
+ 
+ dnl TODO: add checks for library on system

@@ -1,0 +1,56 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.40.0, which adds
+some more flexibility to detect CLucene headers and libraries. Right now, Zarafa is
+linking static to CLucene, which is a no-go at Fedora. That means CLucene on Fedora
+doesn't provide static library files at all. To keep Zarafa's behaviour for their
+own builds, the patch looks for "libclucene.a" and links static; otherwise (Fedora)
+it links dynamically using -lclucene. More details about static linking and Fedora:
+http://fedoraproject.org/wiki/Packaging:Guidelines#Packaging_Static_Libraries
+
+Zarafa's internal CLucene build for Zarafa seems to violate upstream's decision, as
+CLucene upstream decided with 0.9.20 release to put "CLucene/clucene-config.h" file
+into /usr/lib{,64}/CLucene/clucene-config.h because of arch-specific values. Fedora
+is shipping CLucene using upstream's decision, thus ./configure needs to handle the
+include path with GCC CPP, too. To avoid CPP telling "rejected by the preprocessor"
+as of the missing include path (/usr/include is standard, but /usr/lib{,64} isn't),
+$CXXCPP needs to be temporarily extended to contain this special path as well.
+
+--- zarafa-6.40.0/configure.ac			2010-06-06 14:47:37.000000000 +0200
++++ zarafa-6.40.0/configure.ac.clucene		2010-06-06 15:16:18.000000000 +0200
+@@ -394,17 +394,26 @@
+   [CLUCENE_INCLUDE_PREFIX=${withval}],[CLUCENE_INCLUDE_PREFIX=/usr/include])
+ cflags_keep=$CFLAGS
+ cxxflags_keep=$CXXFLAGS
++cxxcpp_keep=$CXXCPP
+ if test "x$CLUCENE_LIB_PREFIX" != "x"; then
+    CFLAGS="$CFLAGS -I$CLUCENE_LIB_PREFIX"
+    CXXFLAGS="$CFLAGS -I$CLUCENE_LIB_PREFIX"
++   CXXCPP="$CXXCPP -I$CLUCENE_LIB_PREFIX"
+ fi
+ if test "x$CLUCENE_INCLUDE_PREFIX" != "x"; then
+    CFLAGS="$CFLAGS -I$CLUCENE_INCLUDE_PREFIX"
+    CXXFLAGS="$CFLAGS -I$CLUCENE_INCLUDE_PREFIX"
++   CXXCPP="$CXXCPP -I$CLUCENE_INCLUDE_PREFIX"
++fi
++if test -e "${CLUCENE_LIB_PREFIX}/libclucene.a"; then
++  AC_CHECK_LIB(clucene, [open],
++    [ CLUCENE_LIBS="${CLUCENE_LIB_PREFIX}/libclucene.a" ],
++    [ WITH_CLUCENE=no ])
++else
++  AC_CHECK_LIB(clucene, [open],
++    [ CLUCENE_LIBS="-lclucene" ],
++    [ WITH_CLUCENE=no ])
+ fi
+-AC_CHECK_LIB(clucene, [open],
+-  [ CLUCENE_LIBS="${CLUCENE_LIB_PREFIX}/libclucene.a" ],
+-  [ WITH_CLUCENE=no ])
+ AC_CHECK_HEADERS([CLucene.h],
+   [ CLUCENE_CFLAGS="-DLUCENE_DISABLE_MEMTRACKING" ],
+   [ WITH_CLUCENE=no ])
+@@ -419,6 +428,7 @@
+ AC_SUBST(CLUCENE_LIBS)
+ CFLAGS=$cflags_keep
+ CXXFLAGS=$cxxflags_keep
++CXXCPP=$cxxcpp_keep
+ AC_LANG_POP
+ 
+ # Check for google perftools tcmalloc availability

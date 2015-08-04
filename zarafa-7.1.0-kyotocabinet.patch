@@ -1,0 +1,39 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.0beta1, which allows to build Zarafa
+even if Kyoto Cabinet is not available. In the end it's introducing the same behaviour like CLucene has at
+the moment already. If you build using './configure --with-clucene-lib-prefix=' simply no zarafa-indexer
+gets build. If you build using './configure --with-clucene-lib-prefix= --disable-kyotocabinet' simply no
+zarafa-indexer will be build on Zarafa 7.1. If you don't pass both options, it's looking for CLucene and
+Kyoto Cabinet like before. However, there are (experimental) architectures, where one or both is not (yet)
+available and this avoids building Zarafa on these architectures and/or systems. It should not introduce
+any regressions, just give some more flexibility to packagers. https://jira.zarafa.com/browse/ZCP-9862 is
+providing some more information.
+
+--- zarafa-7.1.0/configure.ac						2012-04-18 18:09:19.000000000 +0200
++++ zarafa-7.1.0/configure.ac.kyotocabinet				2012-04-27 00:17:43.000000000 +0200
+@@ -408,7 +408,15 @@
+ CXXFLAGS=$CXXFLAGS_system
+ CPPFLAGS=$CPPFLAGS_system
+ 
++AC_ARG_ENABLE(kyotocabinet, AC_HELP_STRING([--enable-kyotocabinet], [enable building with kyotocabinet support]), [want_kyotocabinet=${enableval}], [want_kyotocabinet=yes])
++AM_CONDITIONAL(WITH_KYOTOCABINET, test "$want_kyotocabinet" = "yes")
++if test "$want_kyotocabinet" = "yes"; then
+ PKG_CHECK_MODULES([KYOTOCABINET], [kyotocabinet])
++else
++AC_MSG_CHECKING([for KYOTOCABINET])
++AC_MSG_RESULT([$want_kyotocabinet])
++fi
++AM_CONDITIONAL([WITH_KYOTOCABINET], [test "$want_kyotocabinet" = "yes"])
+ AC_SUBST(KYOTOCABINET_CFLAGS)
+ AC_SUBST(KYOTOCABINET_LIBS)
+ 
+--- zarafa-7.1.0/ECtools/zarafa-indexer/Makefile.am			2012-04-18 18:11:10.000000000 +0200
++++ zarafa-7.1.0/ECtools/zarafa-indexer/Makefile.am.kyotocabinet	2012-04-27 00:16:58.000000000 +0200
+@@ -1,6 +1,8 @@
+ if WITH_CLUCENE
++if WITH_KYOTOCABINET
+ bin_PROGRAMS = zarafa-indexer
+ endif
++endif
+ 
+ AM_CPPFLAGS = \
+ 	-I${top_srcdir}/mapi4linux/include \

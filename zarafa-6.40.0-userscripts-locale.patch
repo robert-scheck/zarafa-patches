@@ -1,0 +1,35 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 6.40.0, which allows to really override language
+in the userscripts. The $ZARAFA_USERSCRIPT_LOCALE variable from /etc/sysconfig/zarafa is used nowhere so far, but
+it should be used in the userscripts. The logic is: If $ZARAFA_USERSCRIPT_LOCALE is set use it, otherwise check
+$LC_MESSAGES and use it if set, otherwise use "en_EN". This allows a more consistent and consequent behaviour...
+
+--- zarafa-6.40.0/installer/userscripts/companies_common.sh			2010-04-14 17:01:00.000000000 +0200
++++ zarafa-6.40.0/installer/userscripts/companies_common.sh.userscripts		2010-04-19 03:11:18.000000000 +0200
+@@ -1,6 +1,6 @@
+ # shell include script
+ 
+-ZARAFA_LANG="${LC_MESSAGES:-en_US}"
++ZARAFA_LANG="${ZARAFA_USERSCRIPT_LOCALE:-${LC_MESSAGES:-en_EN}}"
+ PATH=/bin:/usr/local/bin:/usr/bin
+ export ZARAFA_LANG PATH
+ 
+--- zarafa-6.40.0/installer/userscripts/groups_common.sh			2010-04-14 17:01:00.000000000 +0200
++++ zarafa-6.40.0/installer/userscripts/groups_common.sh.userscripts		2010-04-19 03:11:35.000000000 +0200
+@@ -1,6 +1,6 @@
+ # shell include script
+ 
+-ZARAFA_LANG="${LC_MESSAGES:-en_US}"
++ZARAFA_LANG="${ZARAFA_USERSCRIPT_LOCALE:-${LC_MESSAGES:-en_EN}}"
+ PATH=/bin:/usr/local/bin:/usr/bin
+ export ZARAFA_LANG PATH
+ 
+--- zarafa-6.40.0/installer/userscripts/users_common.sh				2010-04-14 17:01:00.000000000 +0200
++++ zarafa-6.40.0/installer/userscripts/users_common.sh.userscripts		2010-04-19 03:11:49.000000000 +0200
+@@ -1,6 +1,6 @@
+ # shell include script
+ 
+-ZARAFA_LANG="${LC_MESSAGES:-en_US}"
++ZARAFA_LANG="${ZARAFA_USERSCRIPT_LOCALE:-${LC_MESSAGES:-en_EN}}"
+ PATH=/bin:/usr/local/bin:/usr/bin
+ export ZARAFA_LANG PATH
+ 

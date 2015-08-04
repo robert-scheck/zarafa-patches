@@ -1,0 +1,20 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 6.40.0, which removes a
+wrong include causing a build failure on native Fedora 11 and/or later as well as on RHEL
+4 and/or later. According to some Kerberos people, "com_err.h" is already included by the
+"krb5.h" include and thus doesn't need to be included once more.
+
+The build failure on RHEL/Fedora is caused due the non-existence of this include, on RHEL/
+Fedora, only "<et/com_err.h>" would be available. If you really need the "com_err.h" for
+some other Linux distributions (where I didn't find a real difference so far), you have to
+conditionalize the include using preprocessor flags after detection in ./configure.
+
+--- zarafa-6.40.0/provider/libserver/ECKrbAuth.cpp	2010-05-31 19:28:59.000000000 +0200
++++ zarafa-6.40.0/provider/libserver/ECKrbAuth.cpp.krb5	2010-06-05 21:48:51.000000000 +0200
+@@ -58,7 +58,6 @@
+ // error_message() is wrongly typed in c++ context
+ extern "C" {
+ #include <krb5.h>
+-#include <com_err.h>
+ }
+ 
+ ECRESULT ECKrb5AuthenticateUser(const std::string &strUsername, const std::string &strPassword, std::string *lpstrError)
