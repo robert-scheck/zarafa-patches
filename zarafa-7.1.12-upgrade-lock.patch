@@ -1,0 +1,56 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa 7.1.12 which backports the fix for
+CVE-2015-3436. Guido Günther detected and reported that replacing "/tmp/zarafa-upgrade-lock" by
+a symlink makes the zarafa-server process following that symlink and thus allows to overwrite
+arbitrary files in the filesystem (assuming zarafa-server runs as root which is not the case by
+default at Fedora, but it is the upstream default). One just needs write permissions in /tmp and
+wait until the zarafa-server is restarted. https://bugzilla.redhat.com/show_bug.cgi?id=1222151
+contains further information. The difference between this backport and the original diff is that
+the log levels were reworked from Zarafa 7.1.x to 7.2.x (which this backport takes care of).
+
+--- zarafa-7.1.12/provider/server/ECServer.cpp			2015-05-08 15:09:05.000000000 +0200
++++ zarafa-7.1.12/provider/server/ECServer.cpp.upgrade-lock	2015-05-18 23:05:00.000000000 +0200
+@@ -101,6 +101,8 @@
+ // have to go with the safe value which is for 64bit.
+ #define MYSQL_MIN_THREAD_STACK (256*1024)
+ 
++const char upgrade_lock_file[] = "/tmp/zarafa-upgrade-lock";
++
+ extern ECSessionManager*    g_lpSessionManager;
+ 
+ // scheduled functions
+@@ -832,7 +834,7 @@
+ 	// SIGSEGV backtrace support
+ 	stack_t st = {0};
+ 	struct sigaction act = {{0}};
+-	FILE *tmplock = NULL;
++	int tmplock = -1;
+ 	struct stat dir = {0};
+ 	struct passwd *runasUser = NULL;
+ 
+@@ -1288,8 +1290,9 @@
+ 	m_bDatabaseUpdateIgnoreSignals = true;
+ 
+ 	// add a lock file to disable the /etc/init.d scripts
+-	tmplock = fopen("/tmp/zarafa-upgrade-lock","w");
+-	if (!tmplock)
++	tmplock = open(upgrade_lock_file, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
++
++	if (tmplock == -1)
+ 		g_lpLogger->Log(EC_LOGLEVEL_FATAL, "WARNING: Unable to place upgrade lockfile: %s", strerror(errno));
+ 
+ #ifdef EMBEDDED_MYSQL
+@@ -1314,9 +1317,11 @@
+ 	er = lpDatabaseFactory->UpdateDatabase(m_bForceDatabaseUpdate, dbError);
+ 
+ 	// remove lock file
+-	if (tmplock) {
+-		fclose(tmplock);
+-		unlink("/tmp/zarafa-upgrade-lock");
++	if (tmplock != -1) {
++		if (unlink(upgrade_lock_file) == -1)
++			g_lpLogger->Log(EC_LOGLEVEL_FATAL, "WARNING: Unable to delete upgrade lockfile (%s): %s", upgrade_lock_file, strerror(errno));
++
++		close(tmplock);
+ 	}
+ 
+ 	if(er == ZARAFA_E_INVALID_VERSION) {

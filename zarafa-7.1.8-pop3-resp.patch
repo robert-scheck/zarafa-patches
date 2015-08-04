@@ -1,0 +1,100 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.8 which implements the
+POP3 RESP-CODES and AUTH-RESP-CODE extensions according to RFC 2449 and RFC 3206. Now some
+responses contain more details in square brackets about the type of the failure according
+to the specifications to help POP3 clients to differ a bit between different failure types
+like authentication failures vs. common vs. permanent system failures vs. temporary system
+failures. Note that this patch requires the POP3 CAPA (CAPABILITIES) patch applied before
+(zarafa-7.1.8-pop3-capa.patch).
+
+Testing: Configure zarafa-gateway for POP3/POP3S usage as usual. Use the "CAPA" command now
+before authentication, after authentication with enabled POP3S and without enabled POP3S.
+Additionally cause some errors (try to use STLS with unconfigured POP3S, try to login twice
+or cause an authentication failure).
+
+Important: AUTH-RESP-CODE should be only issued either in response to PASS or if there is
+already an active session as it might confirm the existence of a user according to RFC; but
+practically this is (fortunately) not handled that strict when comparing with e.g. Dovecot.
+
+--- zarafa-7.1.8/gateway/POP3.cpp			2014-03-04 08:35:23.000000000 +0100
++++ zarafa-7.1.8/gateway/POP3.cpp.pop3-resp		2014-03-04 19:48:50.000000000 +0100
+@@ -312,7 +312,7 @@
+ 	string strCapabilities;
+ 
+ 	// capabilities we always have
+-	strCapabilities = "\r\nCAPA\r\nTOP\r\nUIDL\r\n";
++	strCapabilities = "\r\nCAPA\r\nTOP\r\nUIDL\r\nRESP-CODES\r\nAUTH-RESP-CODE\r\n";
+ 
+ 	if (lpSession == NULL) {
+ 		// authentication capabilities
+@@ -359,7 +359,7 @@
+ 	HRESULT hr = hrSuccess;
+ 
+ 	if (!lpChannel->sslctx()) {
+-		hr = HrResponse(POP3_RESP_ERR, "STLS error in ssl context");
++		hr = HrResponse(POP3_RESP_PERMFAIL, "STLS error in ssl context");
+ 		goto exit;
+ 	}
+ 
+@@ -399,10 +399,10 @@
+ HRESULT POP3::HrCmdUser(const string &strUser) {
+ 	HRESULT hr = hrSuccess;
+ 	if (lpStore != NULL) {
+-		hr = HrResponse(POP3_RESP_ERR, "Can't login twice");
++		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Can't login twice");
+ 	} else if (strUser.length() > POP3_MAX_RESPONSE_LENGTH) {
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "Username too long: %d > %d", (int)strUser.length(), POP3_MAX_RESPONSE_LENGTH);
+-		hr = HrResponse(POP3_RESP_ERR, "Username to long");
++		hr = HrResponse(POP3_RESP_PERMFAIL, "Username too long");
+ 	} else {
+ 		szUser = strUser;
+ 		hr = HrResponse(POP3_RESP_OK, "Waiting for password");
+@@ -423,16 +423,16 @@
+ 	HRESULT hr = hrSuccess;
+ 
+ 	if (lpStore != NULL) {
+-		hr = HrResponse(POP3_RESP_ERR, "Can't login twice");
++		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Can't login twice");
+ 	} else if (strPass.length() > POP3_MAX_RESPONSE_LENGTH) {
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "Password too long: %d > %d", (int)strPass.length(), POP3_MAX_RESPONSE_LENGTH);
+-		hr = HrResponse(POP3_RESP_ERR, "Password to long");
++		hr = HrResponse(POP3_RESP_PERMFAIL, "Password too long");
+ 	} else if (szUser.empty()) {
+ 		hr = HrResponse(POP3_RESP_ERR, "Give username first");
+ 	} else {
+ 		hr = this->HrLogin(szUser, strPass);
+ 		if (hr != hrSuccess) {
+-			HrResponse(POP3_RESP_ERR, "Wrong username or password");
++			HrResponse(POP3_RESP_AUTH_ERROR, "Wrong username or password");
+ 			goto exit;
+ 		}
+ 
+@@ -570,7 +570,7 @@
+ 		hr = IMToINet(lpSession, lpAddrBook, lpMessage, &szMessage, sopt, lpLogger);
+ 		if (hr != hrSuccess) {
+ 			lpLogger->Log(EC_LOGLEVEL_ERROR, "Error converting MAPI to MIME: 0x%08x", hr);
+-			HrResponse(POP3_RESP_ERR, "Converting MAPI to MIME error");
++			HrResponse(POP3_RESP_PERMFAIL, "Converting MAPI to MIME error");
+ 			goto exit;
+ 		}
+ 
+@@ -798,7 +798,7 @@
+ 		hr = IMToINet(lpSession, lpAddrBook, lpMessage, &szMessage, sopt, lpLogger);
+ 		if (hr != hrSuccess) {
+ 			lpLogger->Log(EC_LOGLEVEL_ERROR, "Error converting MAPI to MIME: 0x%08x", hr);
+-			HrResponse(POP3_RESP_ERR, "Converting MAPI to MIME error");
++			HrResponse(POP3_RESP_PERMFAIL, "Converting MAPI to MIME error");
+ 			goto exit;
+ 		}
+ 
+--- zarafa-7.1.8/gateway/POP3.h				2014-03-04 08:35:23.000000000 +0100
++++ zarafa-7.1.8/gateway/POP3.h.pop3-resp		2014-03-04 08:36:03.000000000 +0100
+@@ -62,6 +62,9 @@
+ #define POP3_MAX_RESPONSE_LENGTH 512
+ 
+ #define POP3_RESP_OK "+OK "
++#define POP3_RESP_TEMPFAIL "-ERR [SYS/TEMP] "
++#define POP3_RESP_PERMFAIL "-ERR [SYS/PERM] "
++#define POP3_RESP_AUTH_ERROR "-ERR [AUTH] "
+ #define POP3_RESP_ERR "-ERR "
+ 
+ /* enum POP3_Command { POP3_CMD_USER, POP3_CMD_PASS, POP3_CMD_STAT, POP3_CMD_LIST, POP3_CMD_RETR, POP3_CMD_DELE, POP3_CMD_NOOP, */

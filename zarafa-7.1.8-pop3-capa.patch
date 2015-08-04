@@ -1,0 +1,98 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.8 which implements the
+POP3 CAPA (CAPABILITIES) command according to RFC 2449. The code is heavily based on the
+Zarafa IMAP gateway thus it should not introduce any new issue. However this patch requires
+the POP3 STLS (STARTTLS) patch applied before (https://jira.zarafa.com/browse/ZCP-12118).
+
+Testing: Configure zarafa-gateway for POP3/POP3S usage as usual. Use the "CAPA" command now
+before authentication, after authentication with enabled POP3S and without enabled POP3S.
+
+Important: Some clients (such as fetchmail) require the "CAPA" command in order to perform
+proper STLS (STARTTLS); a testing example configuration for /etc/fetchmailrc (do not forget
+"chmod 600 /etc/fetchmailrc") is: "poll 127.0.0.1 proto pop3 user tux password tux sslproto
+tls1 is nobody here".
+
+--- zarafa-7.1.8/gateway/POP3.cpp			2014-03-03 00:30:09.000000000 +0100
++++ zarafa-7.1.8/gateway/POP3.cpp.pop3-capa		2014-03-03 20:18:45.000000000 +0100
+@@ -167,7 +167,13 @@
+ 	strCommand = vWords[0];
+ 	transform(strCommand.begin(), strCommand.end(), strCommand.begin(), ::toupper);
+ 
+-	if (strCommand.compare("STLS") == 0) {
++	if (strCommand.compare("CAPA") == 0) {
++		if (vWords.size() != 1) {
++			hr = HrResponse(POP3_RESP_ERR, "CAPA command must have 0 arguments");
++			goto exit;
++		}
++		hr = HrCmdCapability();
++	} else if (strCommand.compare("STLS") == 0) {
+ 		if (vWords.size() != 1) {
+ 			hr = HrResponse(POP3_RESP_ERR, "STLS command must have 0 arguments");
+ 			goto exit;
+@@ -293,6 +299,55 @@
+ 	return lpChannel->HrWriteLine(strResult + strResponse);
+ }
+ 
++/**
++ * Returns the CAPA string. In some stages, items can be listed or
++ * not. This depends on the command received from the client, and
++ * the logged on status of the user. Last state is autodetected in
++ * the class.
++ * 
++ * @return  The capabilities string
++ */
++std::string POP3::GetCapabilityString()
++{
++	string strCapabilities;
++
++	// capabilities we always have
++	strCapabilities = "\r\nCAPA\r\nTOP\r\nUIDL\r\n";
++
++	if (lpSession == NULL) {
++		// authentication capabilities
++		if (!lpChannel->UsingSsl() && lpChannel->sslctx())
++			strCapabilities += "STLS\r\n";
++
++		strCapabilities += "USER\r\n";
++	}
++
++	strCapabilities += ".";
++
++	return strCapabilities;
++}
++
++/** 
++ * @brief Handle the CAPA command
++ *
++ * Sends all the gateway capabilities to the client, depending on the
++ * state we're in. Authentication capabilities are skipped when a user
++ * was already logged in.
++ * 
++ * @return hrSuccess
++ */
++HRESULT POP3::HrCmdCapability() {
++	HRESULT hr = hrSuccess;
++	std::string strCapabilities = GetCapabilityString();
++
++	hr = HrResponse(POP3_RESP_OK, strCapabilities);
++	if (hr != hrSuccess)
++		goto exit;
++
++exit:
++	return hr;
++}
++
+ /** 
+  * @brief Handle the STLS command
+  * 
+--- zarafa-7.1.8/gateway/POP3.h				2014-03-02 23:44:19.000000000 +0100
++++ zarafa-7.1.8/gateway/POP3.h.pop3-capa		2014-03-03 20:21:32.000000000 +0100
+@@ -80,6 +80,9 @@
+ 	HRESULT HrDone(bool bSendResponse);
+ 
+ private:
++	std::string GetCapabilityString();
++
++	HRESULT HrCmdCapability();
+ 	HRESULT HrCmdStarttls();
+ 	HRESULT HrCmdUser(const std::string &strUser);
+ 	HRESULT HrCmdPass(const std::string &strPass);

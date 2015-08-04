@@ -1,0 +1,36 @@
+Remerged changeset of Subversion Revision 18952 from 6.40.0 (trunk) to 6.30.10
+
+--- zarafa-6.30.10/provider/common/ZarafaUtil.cpp			2010-01-26 17:34:51.000000000 +0100
++++ zarafa-6.30.10/provider/common/ZarafaUtil.cpp.fortify		2010-02-22 15:52:11.000000000 +0100
+@@ -355,7 +355,8 @@
+ 	if (!strExternId.empty())
+ 	{
+ 		lpUserEid->ulVersion = 1;
+-		lstrcpy(lpUserEid->szExId, strEncExId.c_str());
++		// avoid FORTIFY_SOURCE checks in strcpy to an address that the compiler thinks is 1 size large
++		memcpy(lpUserEid->szExId, strEncExId.c_str(), strEncExId.length()+1);
+ 	}
+ 
+ 	lpsEntryId->__size = ulLen;
+--- zarafa-6.30.10/provider/libserver/ECUserManagement.cpp		2010-01-26 17:34:51.000000000 +0100
++++ zarafa-6.30.10/provider/libserver/ECUserManagement.cpp.fortify	2010-02-22 16:03:33.000000000 +0100
+@@ -4152,7 +4152,8 @@
+ 	if (!strEncExId.empty())
+ 	{
+ 		lpAbeid->ulVersion = 1;
+-		strcpy(lpAbeid->szExId, strEncExId.c_str());
++		// avoid FORTIFY_SOURCE checks in strcpy to an address that the compiler thinks is 1 size large
++		memcpy(lpAbeid->szExId, strEncExId.c_str(), strEncExId.length()+1);
+ 	}
+ 
+ 	*lpsSourceKey = SOURCEKEY(ulLen, (char*)lpAbeid);
+@@ -4190,7 +4191,8 @@
+ 		memset(lpEid, 0, CbNewABEID(strEncExId.c_str()));
+ 
+ 		lpEid->ulVersion = 1;
+-		lstrcpy(lpEid->szExId, strEncExId.c_str());
++		// avoid FORTIFY_SOURCE checks in strcpy to an address that the compiler thinks is 1 size large
++		memcpy(lpEid->szExId, strEncExId.c_str(), strEncExId.length()+1);
+ 
+ 	}
+ 

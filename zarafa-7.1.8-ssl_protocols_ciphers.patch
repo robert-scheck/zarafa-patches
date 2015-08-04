@@ -1,0 +1,447 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.8 which implements much more
+fine granulated configuration settings for SSL/TLS protocol and cipher enabling and disabling. The
+currently available "ssl_enable_v2" setting allows either to disable SSLv2 (and enables SSLv3 only
+instead) or to enable all, thus SSLv2, SSLv3, TLSv1, TLSv1.1 and TLSv1.2 (TLSv1.1 and TLSv1.2 only
+if Zarafa was linked against OpenSSL 1.0.1 or later). Since SSLv2 has known protocol weaknesses it
+never should be enabled - but for Zarafa it currently must be enabled to support TLSv1 and better.
+
+This patch introduces the new setting "ssl_protocols" which replaces "ssl_enable_v2". The default
+is "!SSLv2" to simply disable SSLv2 by default. The setting can be filled either with SSL protocols
+that shall be enabled and/or disabled, e.g. "SSLv3 TLSv1" or "!SSLv2 !SSLv3". However only the more
+usual disable/exclude option should be used as this does not exclude future protocols by default.
+
+Further this patch introduces the completely new setting "ssl_ciphers". This one allows to set SSL
+cipher suites. Right now, all SSL ciphers are accepted which is just weak or might Zarafa even make
+even vulnerable to known SSL attacks. The German Federal Office for Information Security (BSI) says
+that RC4 should not be used anymore - but Zarafa does it by default. And without this patch there
+is also no way for Zarafa administrators to avoid that. Indeed this setting has the risk to get the
+administrators ending up in a cipher mismatch between different systems but this new setting still
+could be declared as officially unsupported and only for the brave ones who know what they do. Thus
+the default is already set to something less weak than before but still below BSI recommendations.
+
+Finally this patch introduces the also new setting "ssl_prefer_server_ciphers". It does what it is
+named after: When choosing a cipher during an SSL/TLS handshake, normally the client's preference
+is used. If this setting is enabled, the server's preference will be used instead. This comes handy
+to administrators for strange cipher orderings required for special configurations and clients - or
+new weaknesses where workarounds are required for the time being.
+
+Testing: Configure zarafa-gateway, zarafa-ical and zarafa-server for cleartext and SSL as usual.
+Try to login via POP3S, IMAPS, CalDAV-SSL and MAPI in SOAP over HTTPS. Change SSL protocols and the
+ciphers to something more weak ("SSLv2" and "LOW") or to something more strong ("TLSv1.2" and e.g.
+"HIGH"). During all my tests I did not figure out any newly introduced issue or Zarafa breakage.
+
+Important: The technical implementation of this patch might be not perfect as I am not really a C/
+C++ developer. The logic and the implementation is heavily based on Dovecot, Postfix and hints from
+https://docs.fedoraproject.org/en-US/Fedora_Security_Team/html/Defensive_Coding/. There should be
+a code review and code clean up by an experienced C/C++ developer before merging into Zarafa core.
+
+This patch should be only applied in conjuction with the POP3 RESP-CODES and AUTH-RESP-CODE patch,
+the POP3 CAPA (CAPABILITIES) patch as well as the POP3 STLS (STARTTLS) patch applied before.
+
+--- zarafa-7.1.8/caldav/CalDAV.cpp				2014-02-20 12:55:48.000000000 +0100
++++ zarafa-7.1.8/caldav/CalDAV.cpp.rsc				2014-03-08 02:48:11.000000000 +0100
+@@ -220,7 +220,9 @@
+ 		{ "log_timestamp", "1" },
+         { "ssl_private_key_file", "/etc/zarafa/ical/privkey.pem" },
+         { "ssl_certificate_file", "/etc/zarafa/ical/cert.pem" },
+-		{ "ssl_enable_v2", "no" },
++		{ "ssl_protocols", "!SSLv2" },
++		{ "ssl_ciphers", "ALL:!LOW:!SSLv2:!EXP:!aNULL" },
++		{ "ssl_prefer_server_ciphers", "no" },
+         { "ssl_verify_client", "no" },
+         { "ssl_verify_file", "" },
+         { "ssl_verify_path", "" },
+--- zarafa-7.1.8/common/ECChannel.cpp				2014-02-20 12:55:48.000000000 +0100
++++ zarafa-7.1.8/common/ECChannel.cpp.rsc			2014-03-08 13:28:34.000000000 +0100
+@@ -92,6 +92,11 @@
+ 	HRESULT hr = hrSuccess;
+ 	char *szFile = NULL;
+ 	char *szPath = NULL;
++	char *ssl_protocols = strdup(lpConfig->GetSetting("ssl_protocols"));
++	char *ssl_ciphers = lpConfig->GetSetting("ssl_ciphers");
++	char *ssl_name;
++	int ssl_proto, ssl_op = 0, ssl_include = 0, ssl_exclude = 0;
++	bool ssl_neg;
+ 
+ 	if (lpConfig == NULL) {
+ 		hr = MAPI_E_CALL_FAILED;
+@@ -105,11 +110,80 @@
+ 
+ 	SSL_library_init();
+ 	SSL_load_error_strings();
+-	if (parseBool(lpConfig->GetSetting("ssl_enable_v2", "", "no")))
+-		lpCTX = SSL_CTX_new(SSLv23_server_method());
+-	else
+-		lpCTX = SSL_CTX_new(SSLv3_server_method());
++	lpCTX = SSL_CTX_new(SSLv23_server_method());
+ 	SSL_CTX_set_options(lpCTX, SSL_OP_ALL);
++
++	ssl_name = strtok(ssl_protocols, " ");
++	while(ssl_name != NULL) {
++		if (*ssl_name != '!')
++			ssl_neg = FALSE;
++		else {
++			ssl_name++;
++			ssl_neg = TRUE;
++		}
++
++		if (strcasecmp(ssl_name, SSL_TXT_SSLV2) == 0)
++			ssl_proto = 0x01;
++		else if (strcasecmp(ssl_name, SSL_TXT_SSLV3) == 0)
++			ssl_proto = 0x02;
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1) == 0)
++			ssl_proto = 0x04;
++#ifdef SSL_TXT_TLSV1_1
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1_1) == 0)
++			ssl_proto = 0x08;
++#endif
++#ifdef SSL_TXT_TLSV1_2
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1_2) == 0)
++			ssl_proto = 0x10;
++#endif
++		else {
++			lpLogger->Log(EC_LOGLEVEL_ERROR, "Unknown protocol '%s' in ssl_protocols setting", ssl_name);
++			hr = MAPI_E_CALL_FAILED;
++			goto exit;
++		}
++
++		if (ssl_neg)
++			ssl_exclude |= ssl_proto;
++		else
++			ssl_include |= ssl_proto;
++
++		ssl_name = strtok(NULL, " ");
++	}
++
++	if (ssl_include != 0) {
++		// Exclude everything, except those that are included (and let excludes still override those)
++		ssl_exclude |= 0x1f & ~ssl_include;
++	}
++
++	if ((ssl_exclude & 0x01) != 0)
++		ssl_op |= SSL_OP_NO_SSLv2;
++	if ((ssl_exclude & 0x02) != 0)
++		ssl_op |= SSL_OP_NO_SSLv3;
++	if ((ssl_exclude & 0x04) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1;
++#ifdef SSL_OP_NO_TLSv1_1
++	if ((ssl_exclude & 0x08) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1_1;
++#endif
++#ifdef SSL_OP_NO_TLSv1_2
++	if ((ssl_exclude & 0x10) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1_2;
++#endif
++
++	if (ssl_protocols) {
++		SSL_CTX_set_options(lpCTX, ssl_op);
++	}
++
++	if (ssl_ciphers && SSL_CTX_set_cipher_list(lpCTX, ssl_ciphers) != 1) {
++		lpLogger->Log(EC_LOGLEVEL_ERROR, "Can not set SSL cipher list to '%s': %s", ssl_ciphers, ERR_error_string(ERR_get_error(), 0));
++		hr = MAPI_E_CALL_FAILED;
++		goto exit;
++	}
++
++	if (parseBool(lpConfig->GetSetting("ssl_prefer_server_ciphers"))) {
++		SSL_CTX_set_options(lpCTX, SSL_OP_CIPHER_SERVER_PREFERENCE);
++	}
++
+ 	SSL_CTX_set_default_verify_paths(lpCTX);
+ 
+ 	if (SSL_CTX_use_certificate_chain_file(lpCTX, lpConfig->GetSetting("ssl_certificate_file")) != 1) {
+--- zarafa-7.1.8/doc/manual.xml					2014-03-08 01:30:09.000000000 +0100
++++ zarafa-7.1.8/doc/manual.xml.rsc				2014-03-08 04:04:43.000000000 +0100
+@@ -4201,11 +4201,33 @@
+ 		  </varlistentry>
+ 
+ 		  <varlistentry>
+-			<term><option>server_ssl_enable_v2</option></term>
++			<term><option>server_ssl_protocols</option></term>
+ 			<listitem>
+-			  <para>Incoming SSL connections normally are v3.</para>
+-			  <para>Default: <replaceable>no</replaceable>
+-			  </para>
++			  <para>Disabled or enabled protocol names. Supported protocol names
++			  are <replaceable>SSLv2</replaceable>, <replaceable>SSLv3</replaceable>
++			  and <replaceable>TLSv1</replaceable>. If Zarafa was linked against
++			  OpenSSL 1.0.1 or later there is additional support for the new protocols
++			  <replaceable>TLSv1.1</replaceable> and <replaceable>TLSv1.2</replaceable>.
++			  To exclude both, SSLv2 and SSLv3 set <option>server_ssl_protocols</option>
++			  to <replaceable>!SSLv2 !SSLv3</replaceable>. SSLv2 is considered unsafe
++			  and these connections should not be accepted.</para>
++			  <para>Default: <replaceable>!SSLv2</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>server_ssl_ciphers</option></term>
++			<listitem>
++			  <para>SSL ciphers to use, set to <replaceable>ALL</replaceable> for backward compatibility.</para>
++			  <para>Default: <replaceable>ALL:!LOW:!SSLv2:!EXP:!aNULL</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>server_ssl_prefer_server_ciphers</option></term>
++			<listitem>
++			  <para>Prefer the server's order of SSL ciphers over client's.</para>
++			  <para>Default: <replaceable>no</replaceable></para>
+ 			</listitem>
+ 		  </varlistentry>
+ 
+@@ -8045,11 +8067,32 @@
+ 		  </varlistentry>
+ 
+ 		  <varlistentry>
+-			<term><option>ssl_enable_v2</option></term>
++			<term><option>ssl_protocols</option></term>
++			<listitem>
++			  <para>Disabled or enabled protocol names. Supported protocol names
++			  are <replaceable>SSLv2</replaceable>, <replaceable>SSLv3</replaceable>
++			  and <replaceable>TLSv1</replaceable>. If Zarafa was linked against
++			  OpenSSL 1.0.1 or later there is additional support for the new protocols
++			  <replaceable>TLSv1.1</replaceable> and <replaceable>TLSv1.2</replaceable>.
++			  To exclude both, SSLv2 and SSLv3 set <option>ssl_protocols</option>
++			  to <replaceable>!SSLv2 !SSLv3</replaceable>. SSLv2 is considered unsafe
++			  and these connections should not be accepted.</para>
++			  <para>Default: <replaceable>!SSLv2</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>ssl_ciphers</option></term>
++			<listitem>
++			  <para>SSL ciphers to use, set to <replaceable>ALL</replaceable> for backward compatibility.</para>
++			  <para>Default: <replaceable>ALL:!LOW:!SSLv2:!EXP:!aNULL</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>ssl_prefer_server_ciphers</option></term>
+ 			<listitem>
+-			  <para>Accept SSLv2 only connections. SSLv2 is considered
+-			  unsafe, and these connections should not be
+-			  accepted.</para>
++			  <para>Prefer the server's order of SSL ciphers over client's.</para>
+ 			  <para>Default: <replaceable>no</replaceable></para>
+ 			</listitem>
+ 		  </varlistentry>
+@@ -10050,11 +10093,32 @@
+ 		  </varlistentry>
+ 
+ 		  <varlistentry>
+-			<term><option>ssl_enable_v2</option></term>
++			<term><option>ssl_protocols</option></term>
++			<listitem>
++			  <para>Disabled or enabled protocol names. Supported protocol names
++			  are <replaceable>SSLv2</replaceable>, <replaceable>SSLv3</replaceable>
++			  and <replaceable>TLSv1</replaceable>. If Zarafa was linked against
++			  OpenSSL 1.0.1 or later there is additional support for the new protocols
++			  <replaceable>TLSv1.1</replaceable> and <replaceable>TLSv1.2</replaceable>.
++			  To exclude both, SSLv2 and SSLv3 set <option>ssl_protocols</option>
++			  to <replaceable>!SSLv2 !SSLv3</replaceable>. SSLv2 is considered unsafe
++			  and these connections should not be accepted.</para>
++			  <para>Default: <replaceable>!SSLv2</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>ssl_ciphers</option></term>
++			<listitem>
++			  <para>SSL ciphers to use, set to <replaceable>ALL</replaceable> for backward compatibility.</para>
++			  <para>Default: <replaceable>ALL:!LOW:!SSLv2:!EXP:!aNULL</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
++			<term><option>ssl_prefer_server_ciphers</option></term>
+ 			<listitem>
+-			  <para>Accept SSLv2 only connections. SSLv2 is considered
+-			  unsafe, and these connections should not be
+-			  accepted.</para>
++			  <para>Prefer the server's order of SSL ciphers over client's.</para>
+ 			  <para>Default: <replaceable>no</replaceable></para>
+ 			</listitem>
+ 		  </varlistentry>
+--- zarafa-7.1.8/gateway/Gateway.cpp				2014-03-08 01:30:09.000000000 +0100
++++ zarafa-7.1.8/gateway/Gateway.cpp.rsc			2014-03-08 02:47:54.000000000 +0100
+@@ -365,7 +365,9 @@
+ 		{ "ssl_verify_client", "no" },
+ 		{ "ssl_verify_file", "" },
+ 		{ "ssl_verify_path", "" },
+-		{ "ssl_enable_v2", "no" },
++		{ "ssl_protocols", "!SSLv2" },
++		{ "ssl_ciphers", "ALL:!LOW:!SSLv2:!EXP:!aNULL" },
++		{ "ssl_prefer_server_ciphers", "no" },
+ 		{ "log_method", "file" },
+ 		{ "log_file", "-" },
+ 		{ "log_level", "2", CONFIGSETTING_RELOADABLE },
+--- zarafa-7.1.8/installer/linux/gateway.cfg			2014-03-08 01:30:09.000000000 +0100
++++ zarafa-7.1.8/installer/linux/gateway.cfg.rsc		2014-03-08 03:50:18.000000000 +0100
+@@ -84,8 +84,14 @@
+ ssl_verify_file		=	
+ ssl_verify_path		=
+ 
+-# Accept SSLv2 only incoming connections
+-ssl_enable_v2 = no
++# SSL protocols to use, set to '!SSLv2' for 'ssl_enable_v2 = no'
++ssl_protocols = !SSLv2
++
++# SSL ciphers to use, set to 'ALL' for backward compatibility
++ssl_ciphers = ALL:!LOW:!SSLv2:!EXP:!aNULL
++
++# Prefer the server's order of SSL ciphers over client's
++ssl_prefer_server_ciphers = no
+ 
+ # Process model, using pthreads (thread) or processes (fork)
+ process_model = fork
+--- zarafa-7.1.8/installer/linux/ical.cfg			2014-02-20 12:07:03.000000000 +0100
++++ zarafa-7.1.8/installer/linux/ical.cfg.rsc			2014-03-08 03:50:10.000000000 +0100
+@@ -66,8 +66,14 @@
+ ssl_verify_file = 
+ ssl_verify_path =
+ 
+-# Accept SSLv2 only incoming connections
+-ssl_enable_v2 = no
++# SSL protocols to use, set to '!SSLv2' for 'ssl_enable_v2 = no'
++ssl_protocols = !SSLv2
++
++# SSL ciphers to use, set to 'ALL' for backward compatibility
++ssl_ciphers = ALL:!LOW:!SSLv2:!EXP:!aNULL
++
++# Prefer the server's order of SSL ciphers over client's
++ssl_prefer_server_ciphers = no
+ 
+ ##############################################################
+ # OTHER ICAL SETTINGS
+--- zarafa-7.1.8/installer/linux/server.cfg			2014-02-20 12:07:03.000000000 +0100
++++ zarafa-7.1.8/installer/linux/server.cfg.rsc			2014-03-08 03:51:09.000000000 +0100
+@@ -154,8 +154,14 @@
+ # Path with CA certificates, e.g. /etc/ssl/certs
+ server_ssl_ca_path	=
+ 
+-# Accept SSLv2 only connections. Normally v3 connections are used.
+-server_ssl_enable_v2 = no
++# SSL protocols to use, set to '!SSLv2' for 'server_ssl_enable_v2 = no'
++server_ssl_protocols = !SSLv2
++
++# SSL ciphers to use, set to 'ALL' for backward compatibility
++server_ssl_ciphers = ALL:!LOW:!SSLv2:!EXP:!aNULL
++
++# Prefer the server's order of SSL ciphers over client's
++server_ssl_prefer_server_ciphers = no
+ 
+ # Path of SSL Public keys of clients
+ sslkeys_path		= /etc/zarafa/sslkeys
+--- zarafa-7.1.8/provider/server/ECServer.cpp			2014-02-20 12:55:50.000000000 +0100
++++ zarafa-7.1.8/provider/server/ECServer.cpp.rsc		2014-03-08 02:48:53.000000000 +0100
+@@ -919,7 +919,9 @@
+ 		{ "server_ssl_key_pass",		"server",	CONFIGSETTING_EXACT },
+ 		{ "server_ssl_ca_file",			"/etc/zarafa/ssl/cacert.pem" },
+ 		{ "server_ssl_ca_path",			"" },
+-		{ "server_ssl_enable_v2",		"no" },
++		{ "server_ssl_protocols",		"!SSLv2" },
++		{ "server_ssl_ciphers",			"ALL:!LOW:!SSLv2:!EXP:!aNULL" },
++		{ "server_ssl_prefer_server_ciphers",	"no" },
+ 		{ "sslkeys_path",				"/etc/zarafa/sslkeys" },	// login keys
+ 		// Database options
+ 		{ "database_engine",			"mysql" },
+--- zarafa-7.1.8/provider/server/ECSoapServerConnection.cpp	2014-02-20 12:55:50.000000000 +0100
++++ zarafa-7.1.8/provider/server/ECSoapServerConnection.cpp.rsc	2014-03-08 13:36:27.000000000 +0100
+@@ -240,6 +240,11 @@
+ 	ECRESULT	er = erSuccess;
+ 	int			socket = SOAP_INVALID_SOCKET;
+ 	struct soap	*lpsSoap = NULL;
++	char *server_ssl_protocols = strdup(m_lpConfig->GetSetting("server_ssl_protocols"));
++	char *server_ssl_ciphers = m_lpConfig->GetSetting("server_ssl_ciphers");
++	char *ssl_name;
++	int ssl_proto, ssl_op = 0, ssl_include = 0, ssl_exclude = 0;
++	bool ssl_neg;
+ 
+ 	if(lpServerName == NULL) {
+ 		er = ZARAFA_E_INVALID_PARAMETER;
+@@ -270,10 +275,79 @@
+ 		goto exit;
+ 	}
+ 
+-	// disable SSLv2 support
+-	if (!parseBool(m_lpConfig->GetSetting("server_ssl_enable_v2", "", "no")))
+-		SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_NO_SSLv2);
+-	
++	SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_ALL);
++
++	ssl_name = strtok(server_ssl_protocols, " ");
++	while(ssl_name != NULL) {
++		if (*ssl_name != '!')
++			ssl_neg = FALSE;
++		else {
++			ssl_name++;
++			ssl_neg = TRUE;
++		}
++
++		if (strcasecmp(ssl_name, SSL_TXT_SSLV2) == 0)
++			ssl_proto = 0x01;
++		else if (strcasecmp(ssl_name, SSL_TXT_SSLV3) == 0)
++			ssl_proto = 0x02;
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1) == 0)
++			ssl_proto = 0x04;
++#ifdef SSL_TXT_TLSV1_1
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1_1) == 0)
++			ssl_proto = 0x08;
++#endif
++#ifdef SSL_TXT_TLSV1_2
++		else if (strcasecmp(ssl_name, SSL_TXT_TLSV1_2) == 0)
++			ssl_proto = 0x10;
++#endif
++		else {
++			m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Unknown protocol '%s' in server_ssl_protocols setting", ssl_name);
++			er = ZARAFA_E_CALL_FAILED;
++			goto exit;
++		}
++
++		if (ssl_neg)
++			ssl_exclude |= ssl_proto;
++		else
++			ssl_include |= ssl_proto;
++
++		ssl_name = strtok(NULL, " ");
++	}
++
++	if (ssl_include != 0) {
++		// Exclude everything, except those that are included (and let excludes still override those)
++		ssl_exclude |= 0x1f & ~ssl_include;
++	}
++
++	if ((ssl_exclude & 0x01) != 0)
++		ssl_op |= SSL_OP_NO_SSLv2;
++	if ((ssl_exclude & 0x02) != 0)
++		ssl_op |= SSL_OP_NO_SSLv3;
++	if ((ssl_exclude & 0x04) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1;
++#ifdef SSL_OP_NO_TLSv1_1
++	if ((ssl_exclude & 0x08) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1_1;
++#endif
++#ifdef SSL_OP_NO_TLSv1_2
++	if ((ssl_exclude & 0x10) != 0)
++		ssl_op |= SSL_OP_NO_TLSv1_2;
++#endif
++
++	if (server_ssl_protocols) {
++		SSL_CTX_set_options(lpsSoap->ctx, ssl_op);
++	}
++
++	if (server_ssl_ciphers && SSL_CTX_set_cipher_list(lpsSoap->ctx, server_ssl_ciphers) != 1) {
++		m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Can not set SSL cipher list to '%s': %s", server_ssl_ciphers, ERR_error_string(ERR_get_error(), 0));
++		er = ZARAFA_E_CALL_FAILED;
++		goto exit;
++	}
++
++	if (parseBool(m_lpConfig->GetSetting("server_ssl_prefer_server_ciphers"))) {
++		SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
++	}
++
+ 	// request certificate from client, is OK if not present.
+ 	SSL_CTX_set_verify(lpsSoap->ctx, SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE, NULL);
+ 

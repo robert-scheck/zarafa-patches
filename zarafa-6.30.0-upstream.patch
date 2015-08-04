@@ -1,0 +1,98 @@
+--- zarafa-6.30.0/installer/linux/Makefile.am		2009-04-23 22:10:36.000000000 +0200
++++ zarafa-6.30.0/installer/linux/Makefile.am.oss	2009-04-25 18:31:33.000000000 +0200
+@@ -1,17 +1,23 @@
+ datadir = ${prefix}/share/zarafa
+ dist_data_DATA = server.cfg unix.cfg ldap.openldap.cfg ldap.active-directory.cfg \
+-	ldapms.openldap.cfg ldapms.active-directory.cfg \
+-	spooler.cfg gateway.cfg monitor.cfg dagent.cfg ical.cfg licensed.cfg \
+-	zarafa.logrotate \
++	spooler.cfg gateway.cfg monitor.cfg dagent.cfg ical.cfg zarafa.logrotate \
+ 	zarafa-server.init.suse zarafa-spooler.init.suse zarafa-gateway.init.suse zarafa-monitor.init.suse zarafa-ical.init.suse \
+ 	zarafa-server.init.fc zarafa-spooler.init.fc zarafa-gateway.init.fc zarafa-monitor.init.fc zarafa-ical.init.fc \
+ 	zarafa-server.init.cbs4 zarafa-spooler.init.cbs4 zarafa-gateway.init.cbs4 zarafa-monitor.init.cbs4 zarafa-ical.init.cbs4 \
+-	db-convert-4.1-to-4.2 db-convert-4.20-to-4.21 db-convert-4.20-to-innodb.sql db-calc-storesize db-convert-attachments-to-files \
+-	createuser.dotforward db-convert-4.2x-to-5.00 ssl-certificates.sh \
+-	zarafa-licensed.init.cbs4 zarafa-licensed.init.suse zarafa-licensed.init.fc zarafa-dagent.init.cbs4 zarafa-dagent.init.suse zarafa-dagent.init.fc
++	db-calc-storesize db-convert-attachments-to-files createuser.dotforward ssl-certificates.sh \
++	zarafa-dagent.init.cbs4 zarafa-dagent.init.suse zarafa-dagent.init.fc
++
++if ! OSS_ONLY
++dist_data_DATA += ldapms.openldap.cfg ldapms.active-directory.cfg licensed.cfg \
++	zarafa-licensed.init.cbs4 zarafa-licensed.init.suse zarafa-licensed.init.fc \
++	db-convert-4.1-to-4.2 db-convert-4.20-to-4.21 db-convert-4.20-to-innodb.sql \
++	db-convert-4.2x-to-5.00
++endif
+ 
+ bindir = ${prefix}/bin
+ dist_bin_SCRIPTS = zarafa-autorespond
+ 
++if ! OSS_ONLY
+ sysconfdir = /etc/zarafa/report-ca
+ dist_sysconf_DATA = ipsseg.crt
++endif
+--- zarafa-6.30.0/installer/Makefile.am			2009-04-23 22:10:36.000000000 +0200
++++ zarafa-6.30.0/installer/Makefile.am.oss		2009-04-25 18:33:03.000000000 +0200
+@@ -1,4 +1,8 @@
+ SUBDIRS = linux userscripts quotamail
+ 
+ datadir = ${prefix}/share/zarafa
+-dist_data_DATA = ldap/zarafa.schema licenseagreement/eula.txt licenseagreement/AGPL-3
++dist_data_DATA = ldap/zarafa.schema licenseagreement/AGPL-3
++
++if ! OSS_ONLY
++dist_data_DATA += licenseagreement/eula.txt
++endif
+--- zarafa-6.30.0/ECtools/zarafa-stats/Makefile.am	2009-04-23 22:10:40.000000000 +0200
++++ zarafa-6.30.0/ECtools/zarafa-stats/Makefile.am.oss	2009-04-25 18:35:38.000000000 +0200
+@@ -1,9 +1,11 @@
+ bin_PROGRAMS = zarafa-stats
++if ! OSS_ONLY
+ dist_bin_SCRIPTS = zarafa-ssm
+ 
+ sysconfdir = /etc/default
+ crondir = /etc/cron.d
+ dist_sysconf_DATA = zarafa-ssm.default zarafa-ssm.cron
++endif
+ 
+ AM_CPPFLAGS = $(DEBUGFLAGS) -DLINUX \
+ 	-I${top_srcdir}/mapi4linux/include \
+@@ -18,10 +20,12 @@
+ 
+ zarafa_stats_SOURCES = zarafa-stats.cpp
+ 
++if ! OSS_ONLY
+ install-data-hook:
+ 	mv $(DESTDIR)/$(sysconfdir)/zarafa-ssm.default $(DESTDIR)/$(sysconfdir)/zarafa-ssm
+ 	mkdir -p $(DESTDIR)/$(crondir)
+ 	mv $(DESTDIR)/$(sysconfdir)/zarafa-ssm.cron $(DESTDIR)/$(crondir)/zarafa-ssm
++endif
+ 
+ check-syntax:
+ 	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) \
+--- zarafa-6.30.0/doc/Makefile.am			2009-04-23 22:10:24.000000000 +0200
++++ zarafa-6.30.0/doc/Makefile.am.oss			2009-04-25 18:37:49.000000000 +0200
+@@ -1,11 +1,20 @@
+-dist_data_DATA = performance-tuning.txt UPGRADE.txt
++dist_data_DATA = performance-tuning.txt
++
++if ! OSS_ONLY
++dist_data_DATA += UPGRADE.txt
++endif
++
+ datadir = ${prefix}/share/zarafa
+ 
+ BUILT_SOURCES=zarafa.1 \
+ 	zarafa-dagent.1 zarafa-passwd.1 zarafa-spooler.1 zarafa-admin.1 zarafa-server.1 zarafa-gateway.1 zarafa-monitor.1 \
+-	zarafa-backup.1	zarafa-restore.1 zarafa-ical.1 zarafa-licensed.1 zarafa-stats.1 zarafa-fsck.1 zarafa-ical.cfg.5 \
+-	zarafa-server.cfg.5 zarafa-ldap.cfg.5 zarafa-ldapms.cfg.5 zarafa-unix.cfg.5 zarafa-spooler.cfg.5 zarafa-gateway.cfg.5 zarafa-monitor.cfg.5 \
+-	zarafa-licensed.cfg.5 zarafa-dagent.cfg.5
++	zarafa-ical.1 zarafa-stats.1 zarafa-fsck.1 zarafa-ical.cfg.5 \
++	zarafa-server.cfg.5 zarafa-ldap.cfg.5 zarafa-unix.cfg.5 zarafa-spooler.cfg.5 zarafa-gateway.cfg.5 zarafa-monitor.cfg.5 \
++	zarafa-dagent.cfg.5
++
++if ! OSS_ONLY
++BUILT_SOURCES += zarafa-licensed.1 zarafa-licensed.cfg.5 zarafa-ldapms.cfg.5 zarafa-backup.1 zarafa-restore.1
++endif
+ 
+ man_MANS=$(BUILT_SOURCES)
+ 

@@ -1,0 +1,20 @@
+Patch by Robert Scheck <zarafa@robert-scheck.de> for Zarafa <= 7.1.8 which solves another
+unauthenticated remote Denial of Service vulnerability. At least a Fedora build with this
+patch can no longer be crashed. Note that this patch is not the same as CVE-2014-0037; see
+https://bugzilla.redhat.com/show_bug.cgi?id=1059903 for details.
+
+--- zarafa-7.1.8/provider/libserver/ECSession.cpp	2014-01-21 15:38:53.000000000 +0100
++++ zarafa-7.1.8/provider/libserver/ECSession.cpp.rdos	2014-01-29 01:26:49.000000000 +0100
+@@ -865,10 +865,10 @@
+ {
+ 	ECRESULT er = erSuccess;
+ 
+-    if (!lpszName)
++    if (!lpszName || !lpszPassword)
+     {
+         // Commandment 2: Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end.
+-		m_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Invalid argument lpszName in call to ECAuthSession::ValidateUserLogon()");
++		m_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Invalid argument %s in call to ECAuthSession::ValidateUserLogon()", (!lpszName) ? "lpszName" : "lpszPassword");
+ 		er = ZARAFA_E_INVALID_PARAMETER;
+ 		goto exit;
+     }

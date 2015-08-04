@@ -1,0 +1,15 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.2.0 which fixes a default permission issue in
+zarafa-search 3.0 aka zarafa-search-plus. By default the directory /var/lib/zarafa/search/ and subdirectories and
+files are created read- and writable for world by the zarafa-search daemon because the default umask from python-
+daemon is not changed. See also https://bugzilla.redhat.com/show_bug.cgi?id=1206838 for further information.
+
+--- zarafa-7.2.0/swig/python/zarafa/zarafa/__init__.py				2015-03-03 09:50:43.000000000 +0100
++++ zarafa-7.2.0/swig/python/zarafa/zarafa/__init__.py.search-permission	2015-03-29 00:16:32.921926883 +0100
+@@ -2126,6 +2126,7 @@
+                 pidfile=pidfile,
+                 uid=uid,
+                 gid=gid,
++                umask=0o027,
+                 working_directory=working_directory,
+                 files_preserve=[h.stream for h in log.handlers if isinstance(h, logging.handlers.WatchedFileHandler)] if log else None,
+                 prevent_core=False,

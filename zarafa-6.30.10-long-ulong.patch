@@ -1,0 +1,123 @@
+Remerged changeset of Subversion Revision 18968 from 6.40.0 (trunk) to 6.30.10
+
+--- zarafa-6.30.10/php-ext/main.cpp					2010-01-26 17:34:48.000000000 +0100
++++ zarafa-6.30.10/php-ext/main.cpp.php.long-ulong			2010-02-23 20:39:15.000000000 +0100
+@@ -2125,10 +2125,11 @@
+ {
+ 	// params
+ 	zval * res;
+-	LPMAPITABLE	lpTable				= NULL;
+ 	zval * sortArray;
++	long ulFlags = 0;
++	// local
++	LPMAPITABLE	lpTable				= NULL;
+ 	LPSSortOrderSet lpSortCriteria	= NULL;
+-	ULONG ulFlags = 0;
+ 
+ 	RETVAL_FALSE;
+ 	MAPI_G(hr) = hrSuccess;
+@@ -2189,10 +2190,11 @@
+ {
+ 	// params
+ 	zval			*res;
++	zval			*restrictionArray;
++	ulong			ulFlags = 0;
++	// local
+ 	LPMAPITABLE		lpTable = NULL;
+-	zval			*restrictionArray;
+ 	LPSRestriction	lpRestrict = NULL;
+-	ULONG			ulFlags = 0;
+ 
+ 	RETVAL_FALSE;
+ 	MAPI_G(hr) = hrSuccess;
+@@ -2213,7 +2215,7 @@
+ 		}
+ 	}
+ 
+-	MAPI_G(hr) = lpTable->Restrict(lpRestrict, ulFlags); // TODO: set flags from php?
++	MAPI_G(hr) = lpTable->Restrict(lpRestrict, ulFlags);
+ 	if(MAPI_G(hr) != hrSuccess)
+ 		goto exit;
+ 
+@@ -3696,11 +3698,13 @@
+ }
+ 
+ ZEND_FUNCTION(mapi_folder_getsearchcriteria) {
++	// params
+ 	zval *res = NULL;
+ 	zval *restriction = NULL;
+ 	zval *folderlist = NULL;
+ 	LPMAPIFOLDER lpFolder = NULL;
+ 	long ulFlags = 0;
++	// local
+ 	LPSRestriction lpRestriction = NULL;
+ 	LPENTRYLIST lpFolderList = NULL;
+ 	ULONG ulSearchState = 0;
+@@ -3734,13 +3738,15 @@
+ }
+ 
+ ZEND_FUNCTION(mapi_folder_setsearchcriteria) {
+-	LPMAPIFOLDER lpFolder = NULL;
+-	LPENTRYLIST lpFolderList = NULL;
+-	LPSRestriction lpRestriction = NULL;
+-	long ulFlags = 0;
++	// param
+ 	zval *res = NULL;
+ 	zval *restriction = NULL;
+ 	zval *folderlist = NULL;
++	long ulFlags = 0;
++	// local
++	LPMAPIFOLDER lpFolder = NULL;
++	LPENTRYLIST lpFolderList = NULL;
++	LPSRestriction lpRestriction = NULL;
+ 
+ 	RETVAL_FALSE;
+ 	MAPI_G(hr) = hrSuccess;
+@@ -6396,9 +6402,11 @@
+ 
+ ZEND_FUNCTION(mapi_freebusyupdate_publish)
+ {
++	// params
++	zval*				resFBUpdate = NULL;
+ 	zval*				aBlocks = NULL;
+ 	IFreeBusyUpdate*	lpFBUpdate = NULL;
+-	zval*				resFBUpdate = NULL;
++	// local
+ 	FBBlock_1*			lpBlocks = NULL;
+ 	ULONG				cBlocks = 0;
+ 	HashTable*			target_hash = NULL;
+@@ -6495,12 +6503,14 @@
+ 
+ ZEND_FUNCTION(mapi_freebusyupdate_savechanges)
+ {
+-	IFreeBusyUpdate*	lpFBUpdate = NULL;
++	// params
+ 	zval*				resFBUpdate = NULL;
+-	FILETIME			ftmStart;
+-	FILETIME			ftmEnd;
+ 	time_t				ulUnixStart = 0;
+ 	time_t				ulUnixEnd = 0;
++	IFreeBusyUpdate*	lpFBUpdate = NULL;
++	// local
++	FILETIME			ftmStart;
++	FILETIME			ftmEnd;
+ 
+ 	RETVAL_FALSE;
+ 	MAPI_G(hr) = hrSuccess;
+@@ -6523,13 +6533,14 @@
+ 
+ ZEND_FUNCTION(mapi_favorite_add)
+ {
++	// params
+ 	zval *				resSession = NULL;
+ 	zval *				resFolder = NULL;
+ 	Session				*lpSession = NULL;
+-	LPMAPIFOLDER		lpShortCutFolder = NULL;
+-
+ 	LPMAPIFOLDER		lpFolder = NULL;
+ 	long				ulFlags = 0;
++	// local
++	LPMAPIFOLDER			lpShortCutFolder = NULL;
+ 	ULONG				cbAliasName = 0;
+ 	LPSTR				lpszAliasName = NULL;
+ 

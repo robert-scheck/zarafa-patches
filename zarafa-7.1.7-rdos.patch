@@ -1,0 +1,32 @@
+Patch by Robert Scheck <zarafa@robert-scheck.de> for Zarafa <= 7.1.7 which solves the
+recently reported Remote Denial of Service vulnerability. At least a Fedora build with
+this patch can no longer be crashed.
+
+--- zarafa-7.1.5/provider/libserver/ECSession.cpp	2013-06-28 14:16:12.000000000 +0200
++++ zarafa-7.1.5/provider/libserver/ECSession.cpp.rdos	2013-10-18 02:42:15.000000000 +0200
+@@ -865,6 +865,12 @@
+ {
+ 	ECRESULT er = erSuccess;
+ 	
++	// Empty user name can't login
++	if(lpszName == NULL || !lpszName) {
++		er = ZARAFA_E_INVALID_PARAMETER;
++		goto exit;
++	}
++
+ 	// SYSTEM can't login with user/pass
+ 	if(stricmp(lpszName, ZARAFA_ACCOUNT_SYSTEM) == 0) {
+ 		er = ZARAFA_E_NO_ACCESS;
+@@ -941,6 +947,12 @@
+ 		goto userok;
+ 	}
+ 
++	// Empty user name can't login
++	if(lpszName == NULL || !lpszName) {
++		er = ZARAFA_E_INVALID_PARAMETER;
++		goto exit;
++	}
++
+ 	// Lookup user name
+ 	pw = NULL;
+ #ifdef HAVE_GETPWNAM_R

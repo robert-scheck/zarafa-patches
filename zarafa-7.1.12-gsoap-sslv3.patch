@@ -1,0 +1,38 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.1.12 which disables weak SSLv2
+and SSLv3 protocols for encrypted SOAP connections between the Zarafa services. Until (including)
+the Zarafa 7.1.11 release the upstream default was to replace the SSLv23_method() that a pristine
+gSOAP library ships with the "safer" SSLv3_method(). With Zarafa 7.1.12 the SSLv3_method() was
+changed to SSLv23_method(). However this enables SSLv2 again (and still does not disable SSLv3).
+Thus this patch disables SSLv2 and SSLv3 as well as TLS compression explicitly; similar like the
+Zarafa Outlook Client which meanwhile only allows TLSv1.0 (and better).
+
+Proposed to upstream via e-mail on Wed, 2 Apr 2014 11:35:40 +0200, initial patch was put into the
+upstream ticket Ticket#2014040210000266.
+
+--- zarafa-7.1.12/provider/common/SOAPSock.cpp			2015-04-07 13:10:13.000000000 +0200
++++ zarafa-7.1.12/provider/common/SOAPSock.cpp.gsoap-sslv3	2015-04-07 16:32:20.000000000 +0200
+@@ -157,9 +157,6 @@
+ 
+ 	lpCmd->endpoint = strdup(strServerPath.c_str());
+ 
+-	// default allow SSLv3, TLSv1, TLSv1.1 and TLSv1.2
+-	lpCmd->soap->ctx = SSL_CTX_new(SSLv23_method());
+-
+ #ifdef WITH_OPENSSL
+ 	if (strncmp("https:", lpCmd->endpoint, 6) == 0) {
+ 		// no need to add certificates to call, since soap also calls SSL_CTX_set_default_verify_paths()
+@@ -183,6 +180,14 @@
+ 		lpCmd->soap->fsslverify = ssl_verify_callback_zarafa_silent;
+ 
+ 		SSL_CTX_set_verify(lpCmd->soap->ctx, SSL_VERIFY_PEER, lpCmd->soap->fsslverify);
++
++		// disable SSLv2 (according to RFC 6176) and SSLv3, leaving just TLSv1.0 (and better)
++		SSL_CTX_set_options(lpCmd->soap->ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
++
++#ifdef SSL_OP_NO_COMPRESSION
++		// disable TLS compression to close the CRIME attack vector (also known as CVE-2012-4929)
++		SSL_CTX_set_options(lpCmd->soap->ctx, SSL_OP_NO_COMPRESSION);
++#endif
+ 	}
+ #endif
+ 

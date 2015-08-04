@@ -1,0 +1,21 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.11 which logs authentication
+failures of Zarafa WebAccess into the error log of the webserver. This is basically a backport of
+https://jira.zarafa.com/browse/WA-6908 from WebApp to WebAccess. In difference to original patch
+there is no inappropriate space before a punctuation mark also known as "plenken".
+
+Proposed to upstream via e-mail on Wed, 13 Aug 2014 22:56:09 +0200, initial patch was put into the
+upstream ticket https://jira.zarafa.com/browse/ZCP-12543.
+
+--- zarafa-7.1.11/php-webclient-ajax/client/login.php		2014-09-03 10:45:06.000000000 +0200
++++ zarafa-7.1.11/php-webclient-ajax/client/login.php		2015-02-18 01:08:13.000000000 +0100
+@@ -86,6 +86,10 @@
+ 		switch($_SESSION["hresult"]){
+ 			case MAPI_E_LOGON_FAILED:
+ 			case MAPI_E_UNCONFIGURED:
++				// Print error message to error_log of webserver
++				if (!empty($_POST["username"])) {
++					error_log('user '.$_POST["username"].': authentication failure at MAPI');
++				}
+ 				echo _("Logon failed, please check your name/password.");
+ 				break;
+ 			case MAPI_E_NETWORK_ERROR:

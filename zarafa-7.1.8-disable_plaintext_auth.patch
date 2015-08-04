@@ -1,0 +1,184 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.8 which implements an
+option to disable all plaintext authentications unless SSL/TLS is used. This results for
+IMAP in LOGINDISABLED according to RFC 2595 and RFC 5530. As there does not seem to be any
+similar RFC for POP3 this part has been modelled after Dovecot, likely the most common and
+compatible POP3/IMAP server these days - as a best practice implementation.
+
+This patch should solve ZCP-11759. However it needs the POP3 RESP-CODES and AUTH-RESP-CODE
+patch, the POP3 CAPA (CAPABILITIES) patch as well as the POP3 STLS (STARTTLS) patch applied
+before.
+
+Testing: Configure zarafa-gateway for POP3/POP3S and IMAP/IMAPS usage as usual. Try to
+login via POP3, POP3S, IMAP and IMAPS. Disable POP3S and IMAPS and try the same. Change
+new "disable_plaintext_auth" setting in configuration and try all possibilities again.
+
+--- zarafa-7.1.8/doc/manual.xml				2014-02-20 12:03:30.000000000 +0100
++++ zarafa-7.1.8/doc/manual.xml.rsc			2014-03-04 22:04:48.000000000 +0100
+@@ -7983,6 +7983,17 @@
+ 		  </varlistentry>
+ 
+ 		  <varlistentry>
++			<term><option>disable_plaintext_auth</option></term>
++			<listitem>
++			  <para>Disable all plaintext POP3 and IMAP authentications unless
++			  SSL/TLS is used. Obviously this requires at least
++			  <replaceable>ssl_private_key_file</replaceable> and
++			  <replaceable>ssl_certificate_file</replaceable> to take effect.</para>
++			  <para>Default: <replaceable>no</replaceable></para>
++			</listitem>
++		  </varlistentry>
++
++		  <varlistentry>
+ 			<term><option>ssl_private_key_file</option></term>
+ 			<listitem>
+ 			  <para>The gateway will use this file as private
+--- zarafa-7.1.8/gateway/Gateway.cpp			2014-02-20 12:55:49.000000000 +0100
++++ zarafa-7.1.8/gateway/Gateway.cpp.rsc		2014-03-04 21:58:52.000000000 +0100
+@@ -356,6 +356,7 @@
+ 		{ "imap_generate_utf8", "no", CONFIGSETTING_RELOADABLE },
+ 		{ "imap_expunge_on_delete", "no", CONFIGSETTING_RELOADABLE },
+ 		{ "imap_store_rfc822", "yes", CONFIGSETTING_RELOADABLE },
++		{ "disable_plaintext_auth", "no", CONFIGSETTING_RELOADABLE },
+ 		{ "server_socket", "http://localhost:236/zarafa" },
+ 		{ "server_hostname", "" },
+ 		{ "server_hostname_greeting", "no", CONFIGSETTING_RELOADABLE },
+--- zarafa-7.1.8/gateway/IMAP.cpp			2014-02-20 12:55:49.000000000 +0100
++++ zarafa-7.1.8/gateway/IMAP.cpp.rsc			2014-03-04 23:08:49.000000000 +0100
+@@ -747,6 +747,7 @@
+ {
+ 	string strCapabilities;
+ 	char *idle = lpConfig->GetSetting("imap_capability_idle");
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+ 	// capabilities we always have
+ 	strCapabilities = "CAPABILITY IMAP4rev1 LITERAL+";
+@@ -756,7 +757,10 @@
+ 		if (!lpChannel->UsingSsl() && lpChannel->sslctx())
+ 			strCapabilities += " STARTTLS";
+ 
+-		strCapabilities += " AUTH=PLAIN";
++		if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0)
++			strCapabilities += " LOGINDISABLED";
++		else
++			strCapabilities += " AUTH=PLAIN";
+ 	}
+ 
+ 	if (lpSession || bAllFlags) {
+@@ -915,6 +919,19 @@
+ 	HRESULT hr = hrSuccess;
+ 	HRESULT hr2 = hrSuccess;
+ 	vector<string> vAuth;
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
++
++	// If plaintext authentication was disabled any authentication attempt must be refused very soon
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++		hr2 = HrResponse(RESP_TAGGED_NO, strTag, "[PRIVACYREQUIRED] Plaintext authentication disallowed on non-secure "
++							 "(SSL/TLS) connections.");
++		if (hr2 != hrSuccess)
++			goto exit;
++
++		lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s without username (tried to use disallowed plaintext auth)",
++					  lpChannel->GetIPAddress().c_str());
++		goto exit;
++	}
+ 
+ 	ToUpper(strAuthMethod);
+ 	if (strAuthMethod.compare("PLAIN") != 0) {
+@@ -972,6 +989,7 @@
+ 	size_t i;
+ 	wstring strwUsername;
+ 	wstring strwPassword;
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+ 	LPMAPINAMEID lpNameIDs = NULL;
+ 
+@@ -982,6 +1000,23 @@
+ 		strUsername += strUser[i];
+ 	}	
+ 
++	// If plaintext authentication was disabled any login attempt must be refused very soon
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++		hr2 = HrResponse(RESP_UNTAGGED, "BAD [ALERT] Plaintext authentication not allowed without SSL/TLS, but your client "
++						"did it anyway. If anyone was listening, the password was exposed.");
++		if (hr2 != hrSuccess)
++			goto exit;
++
++		hr2 = HrResponse(RESP_TAGGED_NO, strTag, "[PRIVACYREQUIRED] Plaintext authentication disallowed on non-secure "
++							 "(SSL/TLS) connections.");
++		if (hr2 != hrSuccess)
++			goto exit;
++
++		lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s with username \"%s\" (tried to use disallowed plaintext auth)",
++					  lpChannel->GetIPAddress().c_str(), strUsername.c_str());
++		goto exit;
++	}
++
+ 	if (lpSession != NULL) {
+ 		lpLogger->Log(EC_LOGLEVEL_INFO, "Ignoring to login TWICE for username \"%s\"", strUsername.c_str());
+ 		hr = HrResponse(RESP_TAGGED_NO, strTag, "LOGIN Can't login twice");
+--- zarafa-7.1.8/gateway/POP3.cpp			2014-03-04 20:33:37.000000000 +0100
++++ zarafa-7.1.8/gateway/POP3.cpp.rsc			2014-03-04 23:17:54.000000000 +0100
+@@ -310,6 +310,7 @@
+ std::string POP3::GetCapabilityString()
+ {
+ 	string strCapabilities;
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+ 	// capabilities we always have
+ 	strCapabilities = "\r\nCAPA\r\nTOP\r\nUIDL\r\nRESP-CODES\r\nAUTH-RESP-CODE\r\n";
+@@ -319,7 +320,8 @@
+ 		if (!lpChannel->UsingSsl() && lpChannel->sslctx())
+ 			strCapabilities += "STLS\r\n";
+ 
+-		strCapabilities += "USER\r\n";
++		if (!(!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0))
++			strCapabilities += "USER\r\n";
+ 	}
+ 
+ 	strCapabilities += ".";
+@@ -398,7 +400,13 @@
+  */
+ HRESULT POP3::HrCmdUser(const string &strUser) {
+ 	HRESULT hr = hrSuccess;
+-	if (lpStore != NULL) {
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
++
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Plaintext authentication disallowed on non-secure (SSL/TLS) connections");
++		lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s with username \"%s\" (tried to use disallowed plaintext auth)",
++					  lpChannel->GetIPAddress().c_str(), strUser.c_str());
++	} else if (lpStore != NULL) {
+ 		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Can't login twice");
+ 	} else if (strUser.length() > POP3_MAX_RESPONSE_LENGTH) {
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "Username too long: %d > %d", (int)strUser.length(), POP3_MAX_RESPONSE_LENGTH);
+@@ -421,8 +429,17 @@
+  */
+ HRESULT POP3::HrCmdPass(const string &strPass) {
+ 	HRESULT hr = hrSuccess;
++	char *plain = lpConfig->GetSetting("disable_plaintext_auth");
+ 
+-	if (lpStore != NULL) {
++	if (!lpChannel->UsingSsl() && lpChannel->sslctx() && plain && strcmp(plain, "yes") == 0) {
++		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Plaintext authentication disallowed on non-secure (SSL/TLS) connections");
++		if(szUser.empty())
++			lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s without username (tried to use disallowed "
++							 "plaintext auth)", lpChannel->GetIPAddress().c_str());
++		else
++			lpLogger->Log(EC_LOGLEVEL_ERROR, "Aborted login from %s with username \"%s\" (tried to use disallowed "
++							 "plaintext auth)", lpChannel->GetIPAddress().c_str(), szUser.c_str());
++	} else if (lpStore != NULL) {
+ 		hr = HrResponse(POP3_RESP_AUTH_ERROR, "Can't login twice");
+ 	} else if (strPass.length() > POP3_MAX_RESPONSE_LENGTH) {
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "Password too long: %d > %d", (int)strPass.length(), POP3_MAX_RESPONSE_LENGTH);
+--- zarafa-7.1.8/installer/linux/gateway.cfg		2014-02-20 12:07:03.000000000 +0100
++++ zarafa-7.1.8/installer/linux/gateway.cfg.rsc	2014-03-04 22:00:34.000000000 +0100
+@@ -68,6 +68,9 @@
+ # Maximum count of allowed failed IMAP command counts per client
+ imap_max_fail_commands = 10
+ 
++# Disable all plaintext authentications unless SSL/TLS is used
++disable_plaintext_auth = no
++
+ # File with RSA key for SSL
+ ssl_private_key_file	=	/etc/zarafa/gateway/privkey.pem
+ 

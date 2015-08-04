@@ -1,0 +1,16 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa WebApp <= 1.6 which contains a minor
+enhancement to the existing patch at https://jira.zarafa.com/browse/WA-6908. The original patch is
+inserting an inappropriate space before a punctuation mark, socalled "plenken". This change avoids
+this just strange looking "... , ...".
+
+--- webapp-1.6.svn45357/index.php				2014-07-09 15:48:10.000000000 +0200
++++ webapp-1.6.svn45357/index.php				2014-08-13 22:30:07.579440594 +0200
+@@ -346,6 +346,8 @@
+ 			switch($GLOBALS["hresult"]) {
+ 				case MAPI_E_LOGON_FAILED:
+ 				case MAPI_E_UNCONFIGURED:
++					// Print error message to error_log of webserver
++					error_log('user '.$username': authentication failure at MAPI');
+ 					// destroy the session so another login attempt will not use preserved data
+ 					destroySession();
+ 					break;

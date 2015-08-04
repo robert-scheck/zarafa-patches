@@ -1,0 +1,50 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.10 which fixes the RFC-
+violating handling of the Zarafa iCal/CalDAV daemon in response to a password that contains
+a colon. This is documented at http://tools.ietf.org/html/rfc2617#page-5. Additionally this
+has been compared with the DAViCal CalDAV & CardDAV Server server, Tine 2.0 and Radicale.
+
+Wrong behaviour of Zarafa <= 7.1.10-44973 (without this patch):
+$ zarafa-admin -u robert -p test:test
+User information updated.
+$
+$ wget -nv --user=robert --password=test:test http://127.0.0.1:8080/caldav/robert/Calendar
+No data received.
+No data received.
+No data received.
+^C
+$
+
+Correct behaviour of Zarafa (after having this patch applied):
+$ zarafa-admin -u robert -p test:test
+User information updated.
+$
+$ wget -nv --user=robert --password=test:test http://127.0.0.1:8080/caldav/robert/Calendar
+URL:http://127.0.0.1:8080/caldav/robert/Calendar [101/101] -> "Calendar" [1]
+$ 
+
+IMPORTANT: This patch has been very carefully and extensively tested but it might not be
+perfect nevertheless as I am not really a C/C++ developer. There should be a code review
+by an experienced C/C++ developer before merging into Zarafa core.
+
+--- zarafa-7.1.10/caldav/Http.cpp			2014-05-23 15:56:36.000000000 +0200
++++ zarafa-7.1.10/caldav/Http.cpp.caldav-http-auth	2014-08-05 12:45:28.000000000 +0200
+@@ -288,7 +288,7 @@
+ 
+ 
+ 	items = tokenize(base64_decode(items[1]), ':');
+-	if (items.size() != 2) {
++	if (items.size() < 2) {
+ 		hr = MAPI_E_LOGON_FAILED;
+ 		goto exit;
+ 	}
+@@ -296,6 +296,10 @@
+ 	m_strUser = items[0];
+ 	m_strPass = items[1];
+ 
++	// RFC 2617 allows colons in password
++	for (vector<int>::size_type i = 2; i < items.size(); i++)
++		m_strPass += ":" + items[i];
++
+ exit:
+ 	return hr;
+ }

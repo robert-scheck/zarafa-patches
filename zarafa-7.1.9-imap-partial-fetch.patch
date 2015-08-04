@@ -1,0 +1,128 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.9 which fixes the RFC-
+violating reply of the Zarafa IMAP gateway in response to a partial fetch request. This is
+documented at http://tools.ietf.org/html/rfc3501#page-57. Additionally this has been also
+compared with the Dovecot IMAP server as a nearly (or even de facto) IMAP server reference
+implementation. This patch should a) fix ZCP-11739 and b) include hints how to reproduce.
+
+Wrong behaviour of Zarafa <= 7.1.10beta1-44846 (without this patch):
+A6 FETCH 1 (BODY[]<0.16384>)
+* 1 FETCH (BODY[]<0.16384><0> {1689}
+
+Comparison with IMAP server Dovecot 2.2.13:
+A6 FETCH 1 (BODY[]<0.16384>)
+* 1 FETCH (FLAGS (\Seen \Recent) BODY[]<0> {1689}
+
+Correct behaviour of Zarafa (after having this patch applied):
+A6 FETCH 1 (BODY[]<0.16384>)
+* 1 FETCH (BODY[]<0> {1689}
+
+Testing: Full IMAP dialog example from the client perspective (after this patch applied):
+< * OK [CAPABILITY IMAP4rev1 LITERAL+ AUTH=PLAIN] Zarafa IMAP gateway ready
+> A0 LOGIN robert robert
+< A0 OK [CAPABILITY IMAP4rev1 LITERAL+ CHILDREN XAOL-OPTION NAMESPACE QUOTA IDLE] LOGIN completed
+> A1 LIST "" INBOX
+< * LIST (\HasNoChildren) "/" "INBOX"
+< A1 OK LIST completed
+> A2 SELECT INBOX
+< * 1 EXISTS
+< * 1 RECENT
+< * FLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)
+< * OK [PERMANENTFLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)] Permanent flags
+< * OK [UIDNEXT 305] Predicted next UID
+< * OK [UNSEEN 1] First unseen message
+< * OK [UIDVALIDITY 37] UIDVALIDITY value
+< A2 OK [READ-WRITE] SELECT completed
+> A3 SEARCH UNSEEN ALL
+< * SEARCH 1
+< A3 OK SEARCH completed
+> A4 FETCH 1 (FLAGS)
+< * 1 FETCH (FLAGS (\Recent))
+< A4 OK FETCH completed
+> A5 FETCH 1 (ENVELOPE INTERNALDATE RFC822.SIZE)
+< * 1 FETCH (ENVELOPE ("Thu, 15 May 2014 00:42:41 +0200" "Test" ((NIL NIL "robert" "localhost.localdomain")) ((NIL NIL "robert" "localhost.localdomain")) ((NIL NIL "robert" "localhost.localdomain")) ((NIL NIL "robert" "localhost.localdomain")) NIL NIL NIL "<20140514224241.GA24317@localhost.localdomain>") INTERNALDATE "14-May-2014 22:42:41 +0000" RFC822.SIZE 620)
+< A5 OK FETCH completed
+> A6 FETCH 1 (BODY[]<0.16384>)
+< * 1 FETCH (BODY[]<0> {620}
+From root@localhost.localdomain  Thu May 15 00:42:41 2014
+Return-Path: <root@localhost.localdomain>
+X-Original-To: robert@localhost
+Delivered-To: robert@localhost.localdomain
+Received: by localhost.localdomain (Postfix, from userid 0)
+	id 6B692429F9; Thu, 15 May 2014 00:42:41 +0200 (CEST)
+Date: Thu, 15 May 2014 00:42:41 +0200
+From: robert@localhost.localdomain
+To: robert@localhost.localdomain
+Subject: Test
+Message-ID: <20140514224241.GA24317@localhost.localdomain>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.5.20 (2009-12-10)
+
+Test
+
+ FLAGS (\Seen \Recent))
+< A6 OK FETCH completed
+> A7 NOOP
+< * 1 FETCH (FLAGS (\Seen \Recent))
+< A7 OK NOOP completed
+> A8 STORE 1 +FLAGS (\Seen)
+< * 1 FETCH (FLAGS (\Seen \Recent))
+< A8 OK  STORE completed
+> A9 EXPUNGE
+< * 1 FETCH (FLAGS (\Seen \Recent))
+< A9 OK EXPUNGE completed
+> A10 EXAMINE INBOX
+< * 1 EXISTS
+< * 0 RECENT
+< * FLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)
+< * OK [PERMANENTFLAGS (\Seen \Draft \Deleted \Flagged \Answered $Forwarded)] Permanent flags
+< * OK [UIDNEXT 305] Predicted next UID
+< * OK [UIDVALIDITY 37] UIDVALIDITY value
+< A10 OK [READ-ONLY] EXAMINE completed
+> A11 CLOSE
+< A11 OK CLOSE completed
+> A12 LOGOUT
+< * BYE Zarafa server logging out
+< A12 OK LOGOUT completed
+
+Abstract: Without this patch JavaMail 1.4.5 (and later) fails if retrieving e-mails using
+partial fetch via IMAP. When using a software like e.g. TOPdesk (which is built on top of
+JavaMail) a failure on the client side (log file) might look like this:
+
+[2014-05-13 17:03:17,956] WARN     20|_IMPORT      Error creating MimeMessage: javax.mail.MessagingException: IOException while copying message;
+  nested exception is:
+        java.io.IOException: No content         | nl.ogdsoftware.tas.mailimportservice.MailImportBox
+javax.mail.MessagingException: IOException while copying message
+        at javax.mail.internet.MimeMessage.<init>(MimeMessage.java:252) ~[javax.mail-api-1.5.1.jar:1.5.1]
+        at com.topdesk.mailimport.MailMessageProcessor.processMessage(MailMessageProcessor.java:69) ~[mail-5.4.jar:5.4-20140415-1509]
+        at nl.ogdsoftware.tas.mailimportservice.MailImportBox.readBox(MailImportBox.java:109) ~[tas-5.4.jar:5.4-20140415-1509]
+        at nl.ogdsoftware.tas.mailimportservice.MailImportService.readMailBoxes(MailImportService.java:231) [tas-5.4.jar:5.4-20140415-1509]
+        at nl.ogdsoftware.tas.mailimportservice.MailImportService.run(MailImportService.java:160) [tas-5.4.jar:5.4-20140415-1509]
+        at com.topdesk.server.task.AbstractBackgroundService$1.run(AbstractBackgroundService.java:18) [application-5.4.jar:5.4-20140415-1509]
+Caused by: java.io.IOException: No content
+        at com.sun.mail.imap.IMAPInputStream.fill(IMAPInputStream.java:162) ~[javax.mail-1.5.1.jar:1.5.1]
+        at com.sun.mail.imap.IMAPInputStream.read(IMAPInputStream.java:213) ~[javax.mail-1.5.1.jar:1.5.1]
+        at com.sun.mail.imap.IMAPInputStream.read(IMAPInputStream.java:239) ~[javax.mail-1.5.1.jar:1.5.1]
+        at com.sun.mail.imap.IMAPMessage.writeTo(IMAPMessage.java:784) ~[javax.mail-1.5.1.jar:1.5.1]
+        at javax.mail.internet.MimeMessage.<init>(MimeMessage.java:243) ~[javax.mail-api-1.5.1.jar:1.5.1]
+        ... 5 common frames omitted
+
+IMPORTANT: This patch has been very carefully and extensively tested but it might not be
+perfect nevertheless as I am not really a C/C++ developer. There should be a code review
+by an experienced IMAP and C/C++ developer before merging into Zarafa core.
+
+--- zarafa-7.1.9/gateway/IMAP.cpp			2014-03-31 13:45:38.000000000 +0200
++++ zarafa-7.1.9/gateway/IMAP.cpp.imap-partial-fetch	2014-05-15 00:06:26.000000000 +0200
+@@ -4603,6 +4603,11 @@
+ 				if (ulPos != string::npos)
+ 					strReply.erase(ulPos, strlen(".PEEK"));
+ 
++				// Nasty: eventhough the client requests <12345.12345>, it may not be present in the reply.
++				ulPos = strReply.rfind('<');
++				if (ulPos != string::npos)
++					strReply.erase(ulPos, string::npos);
++
+ 				vProps.push_back(strReply);
+ 
+ 				// Handle BODY[] and RFC822 (entire message)

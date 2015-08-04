@@ -1,0 +1,85 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.1.12 which implements ECDHE (elliptic
+curve diffie-hellman key exchange) support. http://en.wikipedia.org/wiki/Elliptic_curve_cryptography is
+providing more information about elliptic curves.
+
+Suggestions for testing; run the following openssl(1) commands before and after applying this patch:
+
+1. echo QUIT | openssl s_client -connect <host>:110 -starttls pop3 2>&1 | grep Cipher
+2. echo QUIT | openssl s_client -connect <host>:143 -starttls imap 2>&1 | grep Cipher
+3. echo QUIT | openssl s_client -connect <host>:237 2>&1 | grep Cipher
+4. echo QUIT | openssl s_client -connect <host>:993 2>&1 | grep Cipher
+5. echo QUIT | openssl s_client -connect <host>:995 2>&1 | grep Cipher
+6. echo QUIT | openssl s_client -connect <host>:8443 2>&1 | grep Cipher
+
+After applying this patch the output should contain e.g. "ECDHE-RSA-AES256-GCM-SHA384" on a Red Hat
+Enterprise Linux 6.5 (only RHEL >= 6.5 has support for elliptic curve). Without this patch the result
+is e.g. "AES256-GCM-SHA384".
+
+Important: The technical implementation of this patch might be not perfect as I am not really a C/C++
+developer. The logic and the implementation is heavily based on Sendmail. There should be a code review
+by an experienced C/C++ and OpenSSL developer before merging into Zarafa core.
+
+This patch should be only applied after ZCP-12143 and its dependencies. However this patch might maybe
+not directly apply due to some previous merge issues as mentioned in Ticket#2014030810000131.
+
+Proposed to upstream via e-mail on Mon, 14 Apr 2014 12:04:17 +0200, initial patch was put into upstream
+ticket https://jira.zarafa.com/browse/ZCP-12237.
+
+--- zarafa-7.1.12/common/ECChannel.cpp					2015-04-07 13:10:12.000000000 +0200
++++ zarafa-7.1.12/common/ECChannel.cpp.ssl_ecdhe			2015-04-07 17:12:15.000000000 +0200
+@@ -93,6 +93,9 @@
+  	char *ssl_ciphers = lpConfig->GetSetting("ssl_ciphers");
+  	char *ssl_name = NULL;
+  	int ssl_op = 0, ssl_include = 0, ssl_exclude = 0;
++#if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
++	EC_KEY *ecdh;
++#endif
+ 
+ 	if (lpConfig == NULL) {
+ 		lpLogger->Log(EC_LOGLEVEL_ERROR, "ECChannel::HrSetCtx(): invalid parameters");
+@@ -113,6 +116,16 @@
+ 
+ 	SSL_CTX_set_options(lpCTX, SSL_OP_ALL);			 // enable quirk and bug workarounds
+ 
++#if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
++	ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
++
++	if (ecdh != NULL) {
++		SSL_CTX_set_options(lpCTX, SSL_OP_SINGLE_ECDH_USE);
++		SSL_CTX_set_tmp_ecdh(lpCTX, ecdh);
++		EC_KEY_free(ecdh);
++	}
++#endif
++
+ 	ssl_name = strtok(ssl_protocols, " ");
+ 	while(ssl_name != NULL) {
+ 		int ssl_proto = 0;
+--- zarafa-7.1.12/provider/server/ECSoapServerConnection.cpp		2015-04-07 13:10:13.000000000 +0200
++++ zarafa-7.1.12/provider/server/ECSoapServerConnection.cpp.ssl_ecdhe	2015-04-07 17:13:23.000000000 +0200
+@@ -235,6 +235,9 @@
+ 	char *server_ssl_ciphers = m_lpConfig->GetSetting("server_ssl_ciphers");
+ 	char *ssl_name = NULL;
+ 	int ssl_op = 0, ssl_include = 0, ssl_exclude = 0;
++#if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
++	EC_KEY *ecdh;
++#endif
+ 
+ 	if(lpServerName == NULL) {
+ 		free(server_ssl_ciphers);
+@@ -268,6 +271,16 @@
+ 
+ 	SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_ALL);
+ 
++#if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
++	ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
++
++	if (ecdh != NULL) {
++		SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_SINGLE_ECDH_USE);
++		SSL_CTX_set_tmp_ecdh(lpsSoap->ctx, ecdh);
++		EC_KEY_free(ecdh);
++	}
++#endif
++
+ 	ssl_name = strtok(server_ssl_protocols, " ");
+ 	while(ssl_name != NULL) {
+ 		int ssl_proto = 0;
