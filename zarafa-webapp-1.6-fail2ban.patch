@@ -10,7 +10,7 @@ this just strange looking "... , ...".
  				case MAPI_E_LOGON_FAILED:
  				case MAPI_E_UNCONFIGURED:
 +					// Print error message to error_log of webserver
-+					error_log('user '.$username': authentication failure at MAPI');
++					error_log('user '.$username.': authentication failure at MAPI');
  					// destroy the session so another login attempt will not use preserved data
  					destroySession();
  					break;

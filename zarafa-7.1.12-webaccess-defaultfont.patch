@@ -1,0 +1,18 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa WebAccess >= 7.1.12 which fixes the issue that the configured
+default font from the settings (for HTML e-mails) is just not applied when creating a new e-mail. This issue is also known
+to Zarafa since at least April 2011 - but will be not fixed at upstream; see also: https://jira.zarafa.com/browse/ZCP-7492
+
+This patch is is free software: You can redistribute it and/or modify it under the terms of the GNU Affero General
+Public License, version 3, as published by the Free Software Foundation.
+
+--- zarafa-7.1.12/php-webclient-ajax/client/layout/dialogs/standard/createmail.php	2015-05-08 15:09:05.000000000 +0200
++++ zarafa-7.1.12/php-webclient-ajax/client/layout/dialogs/standard/createmail.php.rsc	2015-07-12 04:26:59.000000000 +0200
+@@ -381,7 +381,7 @@
+ 
+ 				//set the default font-family for editorarea
+ 				var font_family = parentWebclient.settings.get("createmail/maildefaultfont","Arial");
+-				document.fckEditor.EditorDocument.body.style.fontFamily = font_family;
++				document.fckEditor.EditorDocument.body.getElementsByTagName("p")[0].style.fontFamily = font_family;
+ 				
+ 				// set content of body if it is passed in URL
+ 				<? if(isset($_GET["body"])) { ?>

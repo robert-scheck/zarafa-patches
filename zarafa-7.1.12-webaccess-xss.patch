@@ -1,0 +1,30 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa WebAccess >= 6.00 which ensures proper escaping of
+multiple user properties like fullname/realname, username and e-mail address. Without this patch a user having
+the unlikely fullname/realname '<script>alert("Hello world");</script>' (without the '') is not properly escaped
+on all places within the Zarafa WebAccess; this might be an XSS flaw.
+
+This patch is is free software: You can redistribute it and/or modify it under the terms of the GNU Affero General
+Public License, version 3, as published by the Free Software Foundation.
+
+--- zarafa-7.1.12/php-webclient-ajax/client/webclient.php			2015-05-08 15:09:05.000000000 +0200
++++ zarafa-7.1.12/php-webclient-ajax/client/webclient.php.webaccess-xss		2015-07-09 23:42:35.000000000 +0200
+@@ -220,7 +220,7 @@
+ 					dhtml.executeEvent(document.body, "ZarafaDnD:initDragMsgsToDesktop");
+ 				}
+ 
+-				webclient.setUserInfo("<?=addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getUserName()))?>", "<?=addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getFullName()))?>", "<?=bin2hex($GLOBALS["mapisession"]->getUserEntryid())?>" , "<?=addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getEmail()))?>");
++				webclient.setUserInfo("<?=htmlspecialchars(addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getUserName())))?>", "<?=htmlspecialchars(addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getFullName())))?>", "<?=bin2hex($GLOBALS["mapisession"]->getUserEntryid())?>" , "<?=htmlspecialchars(addslashes(windows1252_to_utf8($GLOBALS["mapisession"]->getEmail())))?>");
+ 
+ 				// Store current sessionid in sessionid variable
+ 				webclient.sessionid = "<?=session_id()?>";
+--- zarafa-7.1.12/php-webclient-ajax/client/core/layoutmanager.js		2015-05-08 15:09:06.000000000 +0200
++++ zarafa-7.1.12/php-webclient-ajax/client/core/layoutmanager.js.webaccess-xss	2015-07-09 23:43:39.000000000 +0200
+@@ -324,7 +324,7 @@
+ 	var loggedon = dhtml.getElementById("loggedon");
+ 
+ 	var loggedonas = document.createElement("span");
+-	loggedonas.innerHTML = _("you are logged on as") + " " + escapeHtml(webclient.fullname);
++	loggedonas.innerHTML = _("you are logged on as") + " " + webclient.fullname;
+ 	loggedon.appendChild(loggedonas);
+ 
+ 	var seperator = document.createElement("span");

@@ -1,0 +1,71 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa WebAccess >= 7.1.12 which adds the features "mobile"
+and "web" to zarafa-admin's --enable-feature/--disable-feature option. Using this setting, Z-Push ("mobile") and
+WebAccess ("web") can be enabled or disabled on a per-user basis. The "mobile" feature is already implemented in
+Z-Push >= 2.2.0 at upstream (and thus 100% compatible), while WebAccess is not implemented at all. Thus the here
+added feature "web" might break with future releases of Zarafa (e.g. when renamed or if array order is changed).
+
+This patch is is free software: You can redistribute it and/or modify it under the terms of the GNU Affero General
+Public License, version 3, as published by the Free Software Foundation.
+
+--- zarafa-7.1.12/common/ECFeatureList.h					2015-05-08 15:09:04.000000000 +0200
++++ zarafa-7.1.12/common/ECFeatureList.h.feature				2015-07-09 23:35:11.000000000 +0200
+@@ -50,7 +50,7 @@
+ 
+ ///< all zarafa features that are checked for access before allowing it
+ const char* zarafa_features[] = {
+-	"imap", "pop3"
++	"imap", "pop3", "mobile", "web"
+ };
+ 
+ /** 
+--- zarafa-7.1.12/php-ext/include/mapi/mapitags.php				2015-05-08 15:09:05.000000000 +0200
++++ zarafa-7.1.12/php-ext/include/mapi/mapitags.php.feature			2015-07-10 00:52:07.000000000 +0200
+@@ -1156,6 +1156,15 @@
+ define('PR_EC_STATS_SESSION_BUSYSTATES'	,mapi_prop_tag(PT_MV_STRING8,	PR_EC_BASE+0x47));
+ define('PR_EC_COMPANY_NAME', mapi_prop_tag(PT_STRING8,	PR_EC_BASE+0x48));
+ 
++/* user features */
++define('PR_EC_ENABLED_FEATURES'                       ,mapi_prop_tag(PT_MV_TSTRING,  PR_EC_BASE+0xB3));
++define('PR_EC_ENABLED_FEATURES_A'                     ,mapi_prop_tag(PT_MV_STRING8,  PR_EC_BASE+0xB3));
++define('PR_EC_ENABLED_FEATURES_W'                     ,mapi_prop_tag(PT_MV_UNICODE,  PR_EC_BASE+0xB3));
++
++define('PR_EC_DISABLED_FEATURES'                      ,mapi_prop_tag(PT_MV_TSTRING,  PR_EC_BASE+0xB4));
++define('PR_EC_DISABLED_FEATURES_A'                    ,mapi_prop_tag(PT_MV_STRING8,  PR_EC_BASE+0xB4));
++define('PR_EC_DISABLED_FEATURES_W'                    ,mapi_prop_tag(PT_MV_UNICODE,  PR_EC_BASE+0xB4));
++
+ /* WA properties */
+ define('PR_EC_WA_ATTACHMENT_HIDDEN_OVERRIDE', mapi_prop_tag(PT_BOOLEAN, PR_EC_BASE+0xE0));
+ 
+--- zarafa-7.1.12/php-webclient-ajax/server/core/class.mapisession.php		2015-05-08 15:09:05.000000000 +0200
++++ zarafa-7.1.12/php-webclient-ajax/server/core/class.mapisession.php.feature	2015-07-10 00:56:20.000000000 +0200
+@@ -147,12 +147,24 @@
+ 				}
+ 
+ 				if ($result == NOERROR && $this->session !== false){
+-					$this->session_info["username"] = $username;
+-					$this->session_info["password"] = $password;
+-					$this->session_info["server"] = $server;
+-					
+-					// we are authenticated
+-					$this->session_info["auth"] = true;
++					// Checks if the user is not disabled for WebAccess
++					$addressbook = $this->getAddressbook();
++					$storeEntryid = mapi_msgstore_createentryid($this->getDefaultMessageStore(), $username);
++					$store = mapi_openmsgstore($this->getSession(), $storeEntryid);
++					$userEntryid = mapi_getprops($store, array(PR_MAILBOX_OWNER_ENTRYID));
++					$mailuser = mapi_ab_openentry($addressbook, $userEntryid[PR_MAILBOX_OWNER_ENTRYID]);
++					$enabledFeatures = mapi_getprops($mailuser, array(PR_EC_DISABLED_FEATURES));
++
++					if (isset($enabledFeatures[PR_EC_DISABLED_FEATURES]) && is_array($enabledFeatures[PR_EC_DISABLED_FEATURES]) && in_array("web", $enabledFeatures[PR_EC_DISABLED_FEATURES])) {
++						$result = MAPI_E_LOGON_FAILED;
++					} else {
++						$this->session_info["username"] = $username;
++						$this->session_info["password"] = $password;
++						$this->session_info["server"] = $server;
++						
++						// we are authenticated
++						$this->session_info["auth"] = true;
++					}
+ 				}
+ 			}
+ 

@@ -4,6 +4,9 @@ broken on the given system and/or architecture. Interestingly that patch is not 
 in 2012 the first time, proposed them as a patch to Zarafa and got merged. With a recent Zarafa release it
 seems they silently removed it again...
 
+Proposed to upstream via e-mail on Fri, 11 Jul 2014 01:03:43 +0200, patch was put into the upstream ticket
+https://jira.zarafa.com/browse/ZCP-12463.
+
 --- zarafa-7.1.10/ECtools/zarafa-search/Makefile.am			2014-05-23 15:03:49.000000000 +0200
 +++ zarafa-7.1.10/ECtools/zarafa-search/Makefile.am.kyotocabinet	2014-07-10 21:48:42.000000000 +0200
 @@ -1,4 +1,8 @@

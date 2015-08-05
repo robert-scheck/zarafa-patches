@@ -1,0 +1,298 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa >= 7.1.13 which implements DHE aka EDH
+(diffie-hellman key exchange) support. https://en.wikipedia.org/wiki/Diffie-Hellman_key_exchange is
+providing more information about Perfect Forward Secrecy (PFS). This implementation might need some
+more resources compared to ECDHE, however not all servers and/or clients are supporting it through;
+e.g. Red Hat Enterprise Linux 5 (and derivates). The prime length of 1024, 2048, 3072, 4096, 6144
+and 8192 bits are based on the private key size to avoid any static DH parameters. Please be aware
+that this patch may cause issues with some older SSL/TLS clients, mostly Java 7 or earlier, that do
+not support primes larger than 1024 bits.
+
+Suggestions for testing; run the following openssl(1) commands before and after applying this patch:
+
+1. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:110 -starttls pop3 2>&1 | grep Cipher
+2. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:143 -starttls imap 2>&1 | grep Cipher
+3. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:237 2>&1 | grep Cipher
+4. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:993 2>&1 | grep Cipher
+5. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:995 2>&1 | grep Cipher
+6. echo QUIT | openssl s_client -cipher 'kEDH:ALL' -connect <host>:8443 2>&1 | grep Cipher
+
+After applying this patch the output should contain e.g. "DHE-RSA-AES256-GCM-SHA384" on a Red Hat
+Enterprise Linux 6 (and derivates). Without this patch the result is e.g. "AES256-GCM-SHA384". Note
+that ZCP-12237 is maybe having influence on the result depending on the exact test case.
+
+Important: As https://www.mail-archive.com/haproxy@formilux.org/msg13274.html is the origin for this
+patch (a HAProxy patch suggestion, which itself bases on mod_ssl of Apache httpd), the licensing is
+likely a combination out of the Apache License, Version 2.0, the GNU General Public License, version
+2 (or later) and the GNU Affero General Public License, version 3 (and thus excludes dual-licensing
+situations such as at the upstream of Zarafa).
+
+This patch should be only applied after ZCP-12237 and its dependencies.
+
+--- zarafa-7.1.13/common/ECChannel.cpp					2015-07-30 01:01:07.212313822 +0200
++++ zarafa-7.1.13/common/ECChannel.cpp.ssl_dhe				2015-07-30 02:05:36.045747555 +0200
+@@ -85,6 +85,119 @@
+ // because of statics
+ SSL_CTX* ECChannel::lpCTX = NULL;
+ 
++#if !defined(OPENSSL_NO_DH)
++static DH *ssl_get_dh_1024(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc2409_prime_1024(NULL);
++		// See RFC 2409, Section 6 "Oakley Groups" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_2048(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_2048(NULL);
++		// See RFC 3526, Section 3 "2048-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_3072(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_3072(NULL);
++		// See RFC 3526, Section 4 "3072-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_4096(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_4096(NULL);
++		// See RFC 3526, Section 5 "4096-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_6144(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_6144(NULL);
++		// See RFC 3526, Section 6 "6144-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_8192(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_8192(NULL);
++		// See RFC 3526, Section 7 "8192-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++// Returns Diffie-Hellman parameters matching the private key length
++static DH *ssl_get_tmp_dh(SSL *ssl, int exporting, int keylen) {
++	DH *dh = NULL;
++	EVP_PKEY *pkey = SSL_get_privatekey(ssl);
++	int type = pkey ? EVP_PKEY_type(pkey->type) : EVP_PKEY_NONE;
++
++	if (type == EVP_PKEY_RSA || type == EVP_PKEY_DSA) {
++		keylen = EVP_PKEY_bits(pkey);
++	}
++
++	if (keylen >= 8192) {
++		dh = ssl_get_dh_8192();
++	} else if (keylen >= 6144) {
++		dh = ssl_get_dh_6144();
++	} else if (keylen >= 4096) {
++		dh = ssl_get_dh_4096();
++	} else if (keylen >= 3072) {
++		dh = ssl_get_dh_3072();
++	} else if (keylen >= 2048) {
++		dh = ssl_get_dh_2048();
++	} else {
++		dh = ssl_get_dh_1024();
++	}
++
++	return dh;
++}
++#endif
++
+ HRESULT ECChannel::HrSetCtx(ECConfig *lpConfig, ECLogger *lpLogger) {
+ 	HRESULT hr = hrSuccess;
+ 	char *szFile = NULL;
+@@ -116,6 +229,11 @@
+ 
+ 	SSL_CTX_set_options(lpCTX, SSL_OP_ALL);			 // enable quirk and bug workarounds
+ 
++#if !defined(OPENSSL_NO_DH)
++	SSL_CTX_set_options(lpCTX, SSL_OP_SINGLE_DH_USE);
++	SSL_CTX_set_tmp_dh_callback(lpCTX, ssl_get_tmp_dh);
++#endif
++
+ #if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
+ 	ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+ 
+--- zarafa-7.1.13/provider/server/ECSoapServerConnection.cpp		2015-07-30 01:01:07.212313822 +0200
++++ zarafa-7.1.13/provider/server/ECSoapServerConnection.cpp.ssl_dhe	2015-07-30 02:05:54.658626465 +0200
+@@ -165,6 +165,119 @@
+ 	return nRet;
+ }
+ 
++#if !defined(OPENSSL_NO_DH)
++static DH *ssl_get_dh_1024(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc2409_prime_1024(NULL);
++		// See RFC 2409, Section 6 "Oakley Groups" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_2048(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_2048(NULL);
++		// See RFC 3526, Section 3 "2048-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_3072(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_3072(NULL);
++		// See RFC 3526, Section 4 "3072-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_4096(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_4096(NULL);
++		// See RFC 3526, Section 5 "4096-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_6144(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_6144(NULL);
++		// See RFC 3526, Section 6 "6144-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++static DH *ssl_get_dh_8192(void) {
++	DH *dh = DH_new();
++	if (dh) {
++		dh->p = get_rfc3526_prime_8192(NULL);
++		// See RFC 3526, Section 7 "8192-bit MODP Group" for the reason why we use 2 as a generator
++		BN_dec2bn(&dh->g, "2");
++		if (!dh->p || !dh->g) {
++			DH_free(dh);
++			dh = NULL;
++		}
++	}
++	return dh;
++}
++
++// Returns Diffie-Hellman parameters matching the private key length
++static DH *ssl_get_tmp_dh(SSL *ssl, int exporting, int keylen) {
++	DH *dh = NULL;
++	EVP_PKEY *pkey = SSL_get_privatekey(ssl);
++	int type = pkey ? EVP_PKEY_type(pkey->type) : EVP_PKEY_NONE;
++
++	if (type == EVP_PKEY_RSA || type == EVP_PKEY_DSA) {
++		keylen = EVP_PKEY_bits(pkey);
++	}
++
++	if (keylen >= 8192) {
++		dh = ssl_get_dh_8192();
++	} else if (keylen >= 6144) {
++		dh = ssl_get_dh_6144();
++	} else if (keylen >= 4096) {
++		dh = ssl_get_dh_4096();
++	} else if (keylen >= 3072) {
++		dh = ssl_get_dh_3072();
++	} else if (keylen >= 2048) {
++		dh = ssl_get_dh_2048();
++	} else {
++		dh = ssl_get_dh_1024();
++	}
++
++	return dh;
++}
++#endif
++
+ ECSoapServerConnection::ECSoapServerConnection(ECConfig* lpConfig, ECLogger* lpLogger)
+ {
+ 	m_lpConfig = lpConfig;
+@@ -271,6 +384,11 @@
+ 
+ 	SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_ALL);
+ 
++#if !defined(OPENSSL_NO_DH)
++	SSL_CTX_set_options(lpsSoap->ctx, SSL_OP_SINGLE_DH_USE);
++	SSL_CTX_set_tmp_dh_callback(lpsSoap->ctx, ssl_get_tmp_dh);
++#endif
++
+ #if !defined(OPENSSL_NO_ECDH) && defined(NID_X9_62_prime256v1)
+ 	ecdh = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+ 

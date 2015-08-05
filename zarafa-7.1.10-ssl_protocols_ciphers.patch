@@ -38,6 +38,9 @@ a code review and code clean up by an experienced C/C++ developer before merging
 This patch should be only applied in conjuction with the POP3 RESP-CODES and AUTH-RESP-CODE patch,
 the POP3 CAPA (CAPABILITIES) patch as well as the POP3 STLS (STARTTLS) patch applied before.
 
+Proposed to upstream via e-mail on Sat, 8 Mar 2014 14:30:29 +0100, patch was put into the upstream
+ticket https://jira.zarafa.com/browse/ZCP-12143.
+
 --- zarafa-7.1.10/caldav/CalDAV.cpp				 2014-05-23 15:56:36.000000000 +0200
 +++ zarafa-7.1.10/caldav/CalDAV.cpp.rsc				 2014-08-12 19:45:04.000000000 +0200
 @@ -220,7 +220,9 @@

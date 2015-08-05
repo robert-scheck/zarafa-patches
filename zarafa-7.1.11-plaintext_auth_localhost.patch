@@ -15,6 +15,9 @@ Important: The technical implementation of this patch might be not perfect as I 
 C++ developer. There should be a code review by an experienced C/C++ developer before merging into
 Zarafa core.
 
+Proposed to upstream via e-mail on Thu, 16 Oct 2014 00:00:05 +0200, patch was put into the upstream
+ticket https://jira.zarafa.com/browse/ZCP-12473.
+
 --- zarafa-7.1.11/gateway/IMAP.cpp				2014-09-03 10:45:06.000000000 +0200
 +++ zarafa-7.1.11/gateway/IMAP.cpp.plaintext_auth_localhost	2014-09-24 01:29:10.000000000 +0200
 @@ -757,7 +757,7 @@

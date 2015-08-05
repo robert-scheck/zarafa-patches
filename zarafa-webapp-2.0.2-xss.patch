@@ -1,0 +1,80 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa WebApp >= 1.0 (including all the technology previews)
+which ensures proper escaping of multiple user properties like fullname/realname, username and e-mail address.
+Without this patch a user having the unlikely fullname/realname '<script>alert("Hello world");</script>' (without
+the '') is not properly escaped on all places within the Zarafa WebApp; this might be an XSS flaw.
+
+This patch is is free software: You can redistribute it and/or modify it under the terms of the GNU Affero General
+Public License, version 3, as published by the Free Software Foundation.
+
+--- webapp-2.0.2.48619/client/webclient.php					2015-02-06 14:52:56.000000000 +0100
++++ webapp-2.0.2.48619/client/webclient.php.xss					2015-07-10 00:04:06.453333700 +0200
+@@ -70,11 +70,11 @@
+ 
+ 		<script type="text/javascript">
+ 			user = {
+-				username		: "<?= addslashes($GLOBALS["mapisession"]->getUserName()) ?>",
+-				fullname		: "<?= addslashes($GLOBALS["mapisession"]->getFullName()) ?>",
++				username		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getUserName())) ?>",
++				fullname		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getFullName())) ?>",
+ 				entryid			: "<?= bin2hex($GLOBALS["mapisession"]->getUserEntryid()) ?>",
+-				email_address		: "<?= addslashes($GLOBALS["mapisession"]->getEmailAddress()) ?>",
+-				smtp_address		: "<?= addslashes($GLOBALS["mapisession"]->getSMTPAddress()) ?>",
++				email_address		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getEmailAddress())) ?>",
++				smtp_address		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getSMTPAddress())) ?>",
+ 				search_key		: "<?= bin2hex($GLOBALS["mapisession"]->getSearchKey()) ?>",
+ 				user_image		: "<?= bin2hex($GLOBALS["mapisession"]->getUserImage()) ?>",
+ 				sessionid		: "<?= $GLOBALS["mapisession"]->getSessionID() ?>"
+--- webapp-2.0.2.48619/client/welcome.php					2014-09-09 17:26:41.000000000 +0200
++++ webapp-2.0.2.48619/client/welcome.php.xss					2015-07-10 00:06:02.748441999 +0200
+@@ -70,11 +70,11 @@
+ 
+ 		<script type="text/javascript">
+ 			user = {
+-				username		: "<?= addslashes($GLOBALS["mapisession"]->getUserName()) ?>",
+-				fullname		: "<?= addslashes($GLOBALS["mapisession"]->getFullName()) ?>",
++				username		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getUserName())) ?>",
++				fullname		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getFullName())) ?>",
+ 				entryid			: "<?= bin2hex($GLOBALS["mapisession"]->getUserEntryid()) ?>",
+-				email_address		: "<?= addslashes($GLOBALS["mapisession"]->getEmailAddress()) ?>",
+-				smtp_address		: "<?= addslashes($GLOBALS["mapisession"]->getSMTPAddress()) ?>",
++				email_address		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getEmailAddress())) ?>",
++				smtp_address		: "<?= htmlspecialchars(addslashes($GLOBALS["mapisession"]->getSMTPAddress())) ?>",
+ 				search_key		: "<?= bin2hex($GLOBALS["mapisession"]->getSearchKey()) ?>",
+ 				sessionid		: "<?= $GLOBALS["mapisession"]->getSessionID() ?>"
+ 			};
+--- webapp-2.0.2.48619/client/zarafa/settings/ui/SettingsAccountWidget.js	2014-09-09 15:14:08.000000000 +0200
++++ webapp-2.0.2.48619/client/zarafa/settings/ui/SettingsAccountWidget.js.xss	2015-07-10 00:02:42.129980367 +0200
+@@ -48,13 +48,11 @@
+ 			items : [{
+ 				xtype : 'displayfield',
+ 				fieldLabel : _('Display Name'),
+-				value : user.getDisplayName(),
+-				htmlEncode : true
++				value : user.getDisplayName()
+ 			},{
+ 				xtype : 'displayfield',
+ 				fieldLabel : _('E-mail'),
+-				value : user.getSMTPAddress(),
+-				htmlEncode : true
++				value : user.getSMTPAddress()
+ 			},{
+ 				xtype : 'zarafa.compositefield',
+ 				fieldLabel : _('Language'),
+--- webapp-2.0.2.48619/index.php						2015-03-24 09:22:01.000000000 +0100
++++ webapp-2.0.2.48619/index.php.xss						2015-07-10 00:06:59.673005585 +0200
+@@ -274,11 +274,11 @@
+ 				"settings" => $GLOBALS["settings"]->getJSON(),
+ 				"languages" => $GLOBALS["language"]->getJSON(),
+ 				"user" => array(
+-					"username" 	=> addslashes($GLOBALS["mapisession"]->getUserName()),
+-					"fullname" 	=> addslashes($GLOBALS["mapisession"]->getFullName()),
++					"username" 	=> htmlspecialchars(addslashes($GLOBALS["mapisession"]->getUserName())),
++					"fullname" 	=> htmlspecialchars(addslashes($GLOBALS["mapisession"]->getFullName())),
+ 					"entryid" 	=> bin2hex($GLOBALS["mapisession"]->getUserEntryid()),
+-					"email_address" => addslashes($GLOBALS["mapisession"]->getEmailAddress()),
+-					"smtp_address" 	=> addslashes($GLOBALS["mapisession"]->getSMTPAddress()),
++					"email_address" => htmlspecialchars(addslashes($GLOBALS["mapisession"]->getEmailAddress())),
++					"smtp_address" 	=> htmlspecialchars(addslashes($GLOBALS["mapisession"]->getSMTPAddress())),
+ 					"search_key" 	=> bin2hex($GLOBALS["mapisession"]->getSearchKey()),
+ 					"sessionid" 	=> $GLOBALS["mapisession"]->getSessionID()
+ 				),
