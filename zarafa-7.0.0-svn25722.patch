@@ -1,0 +1,62 @@
+Index: /trunk/zcp/php-ext/main.cpp
+===================================================================
+--- zcp/php-ext/main.cpp (revision 24877)
++++ zcp/php-ext/main.cpp (revision 25722)
+@@ -7,8 +7,4 @@
+ 
+ #include "ECLogger.h"
+-
+-#include "charset/convert.h"
+-#include "charset/utf8string.h"
+-#include "charset/localeutil.h"
+ 
+ 
+@@ -166,4 +162,5 @@
+ #include <mapispi.h>
+ #include <mapitags.h>
++#include <mapidefs.h>
+ 
+ #include "IECServiceAdmin.h"
+@@ -221,4 +218,8 @@
+ #include "SessionPool.h"
+ #include "typeconversion.h"
++
++#include "charset/convert.h"
++#include "charset/utf8string.h"
++#include "charset/localeutil.h"
+ 
+ using namespace std;
+@@ -739,4 +740,7 @@
+ 	ULONG cbEntryID = 0;
+ 	// local
++	wstring name;
++	wstring type;
++	wstring email;
+ 
+ 	RETVAL_FALSE;
+@@ -748,6 +752,23 @@
+ 		&szEmailAddress, &ulEmailAddressLen, &ulFlags) == FAILURE) return;
+ 
+-	// @todo input should be UTF-8, convert to WCHAR and add MAPI_UNICODE to ulFlags
+-	MAPI_G(hr) = ECCreateOneOff((LPTSTR)szDisplayName, (LPTSTR)szType, (LPTSTR)szEmailAddress, ulFlags, &cbEntryID, &lpEntryID);
++	MAPI_G(hr) = TryConvert(szDisplayName, name);
++	if(MAPI_G(hr) != hrSuccess) {
++		php_error_docref(NULL TSRMLS_CC, E_WARNING, "CreateOneOff name conversion failed");
++		goto exit;
++	}
++
++	MAPI_G(hr) = TryConvert(szType, type);
++	if(MAPI_G(hr) != hrSuccess) {
++		php_error_docref(NULL TSRMLS_CC, E_WARNING, "CreateOneOff type conversion failed");
++		goto exit;
++	}
++
++	MAPI_G(hr) = TryConvert(szEmailAddress, email);
++	if(MAPI_G(hr) != hrSuccess) {
++		php_error_docref(NULL TSRMLS_CC, E_WARNING, "CreateOneOff address conversion failed");
++		goto exit;
++	}
++
++	MAPI_G(hr) = ECCreateOneOff((LPTSTR)name.c_str(), (LPTSTR)type.c_str(), (LPTSTR)email.c_str(), MAPI_UNICODE | ulFlags, &cbEntryID, &lpEntryID);
+ 
+ 	if(MAPI_G(hr) != hrSuccess) {

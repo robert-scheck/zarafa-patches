@@ -1,0 +1,85 @@
+--- zarafa-7.1.10/ECtools/zarafa-search/ECServerIndexer.cpp				2014-05-23 15:56:37.000000000 +0200
++++ zarafa-7.1.10/ECtools/zarafa-search/ECServerIndexer.cpp.search-debug		2014-08-20 21:11:19.000000000 +0200
+@@ -649,8 +649,10 @@
+     }
+ 
+     hr = lpStore->GetProps((LPSPropTagArray)&sptaProps, 0, &cValues, &lpProps);
+-    if(FAILED(hr))
++    if(FAILED(hr)) {
++        m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Unable to get properties from store: %08X", hr);
+         goto exit;
++    }
+ 
+     lpIndex->GetSyncState(strFolderId, strFolderState, strStubTargetState); // ignore error and use empty state if this fails
+ 
+@@ -722,13 +724,16 @@
+             // Do a second-stage index of items in archived servers
+             hr = IndexStubTargets(lstStubTargets, lpImporter);
+             // Do not goto exit, we wish to save the sync state
+-        } else
++        } else {
++            m_lpLogger->Log(EC_LOGLEVEL_FATAL, "MAPI_E_USER_CANCEL");
+             hr = MAPI_E_USER_CANCEL;
++        }
+     }
+ 
+     // Failure to save the state is non-fatal. It can only cause a rescan of the folder
+     // in case the index of the store is incomplete and the server is restarted.
+     if (FAILED(hr)) {
++        m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Non-fatal failure, see following message(s): %08X", hr);
+         hrSaveState = lpImporter->SaveStubTargetState(lstStubTargets, strStubTargetState);
+         if (hrSaveState != hrSuccess) {
+             m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Unable to get stub target state: %08X", hrSaveState);
+@@ -756,6 +761,7 @@
+     	m_lpThreadData->lpLogger->Log(EC_LOGLEVEL_INFO, "Processed folder '%ls' with %d changes (%s) in %d seconds", szName, ulTotalChange, str_storage(ulTotalBytes, false).c_str(), (int)(time(NULL) - ulStartTime));
+ 
+ exit:
++    m_lpLogger->Log(EC_LOGLEVEL_FATAL, "Exiting ECServerIndexer::IndexFolder() with %08X", hr);
+     return hr;
+ }
+ 
+--- zarafa-7.1.10/ECtools/zarafa-search/ECIndexImporterAttachments.cpp			2014-05-23 15:56:37.000000000 +0200
++++ zarafa-7.1.10/ECtools/zarafa-search/ECIndexImporterAttachments.cpp.search-debug	2014-08-20 22:37:30.000000000 +0200
+@@ -697,14 +697,18 @@
+ 	ULONG ulTmp[2];
+ 
+ 	er = lpSerializer->Read(&ulNumAttachments, sizeof(ulNumAttachments), 1);
+-	if (er != erSuccess)
++	if (er != erSuccess) {
++		m_lpThreadData->lpLogger->Log(EC_LOGLEVEL_ERROR, "1st lpSerializer->Read() returns %08X", er);
+ 		goto exit;
++	}
+ 
+ 	for (ULONG i = 0; i < ulNumAttachments; i++) {
+ 		/* Read Object type and id, but we don't need them */
+ 		er = lpSerializer->Read(ulTmp, sizeof(ulTmp[0]), 2);
+-		if (er != erSuccess)
++		if (er != erSuccess) {
++			m_lpThreadData->lpLogger->Log(EC_LOGLEVEL_ERROR, "2nd lpSerializer->Read() returns %08X", er);
+ 			goto exit;
++		}
+ 
+ 		switch (ulTmp[0]) {
+ 		case MAPI_ATTACH:
+@@ -716,15 +720,19 @@
+ 		default:
+ 			/* Subobject is a recipient, skip to next object */
+ 			hr = StreamToNextObject(lpSerializer, ulTmp[0]);
+-			if (hr != hrSuccess)
++			if (hr != hrSuccess) {
++				m_lpThreadData->lpLogger->Log(EC_LOGLEVEL_ERROR, "StreamToNextObject() returns %08X", hr);
+ 				goto exit;
++			}
+ 			break;
+ 		}
+ 	}
+ 
+ exit:
+-	if (er != erSuccess)
++	if (er != erSuccess) {
+ 		hr = ZarafaErrorToMAPIError(er);
++		m_lpThreadData->lpLogger->Log(EC_LOGLEVEL_ERROR, "Exiting ECIndexImporterAttachment::ParseAttachments() with %08X / %08X", hr, er);
++	}
+ 
+ 	return hr;
+ }

@@ -1,0 +1,147 @@
+Backport of upstream patch from subversion revision 50583 to fix https://jira.zarafa.com/browse/ZCP-12148
+
+--- zarafa-7.1.14/inetmapi/ECVMIMEUtils.cpp				2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/inetmapi/ECVMIMEUtils.cpp.spooler-expand_groups	2016-11-28 22:46:59.000000000 +0100
+@@ -112,7 +112,7 @@
+  * This function takes a MAPI table, reads all items from it, expands any groups and adds all expanded recipients into the passed
+  * recipient table. Group expansion is recursive.
+  */
+-HRESULT ECVMIMESender::HrAddRecipsFromTable(LPADRBOOK lpAdrBook, IMAPITable *lpTable, vmime::mailboxList &recipients, std::set<std::wstring> &setGroups, std::set<std::wstring> &setRecips, bool bAllowEveryone)
++HRESULT ECVMIMESender::HrAddRecipsFromTable(LPADRBOOK lpAdrBook, IMAPITable *lpTable, vmime::mailboxList &recipients, std::set<std::wstring> &setGroups, std::set<std::wstring> &setRecips, bool bAllowEveryone, bool bAlwaysExpandDistrList)
+ {
+ 	HRESULT hr = hrSuccess;
+ 	LPSRowSet lpRowSet = NULL;
+@@ -125,14 +125,10 @@
+ 	// Get all recipients from the group
+ 	for (ULONG i = 0; i < lpRowSet->cRows; i++) {
+ 		LPSPropValue lpPropObjectType = PpropFindProp( lpRowSet->aRow[i].lpProps, lpRowSet->aRow[i].cValues, PR_OBJECT_TYPE);
++		bool bAddrFetchSuccess = HrGetAddress(lpAdrBook, lpRowSet->aRow[i].lpProps, lpRowSet->aRow[i].cValues, PR_ENTRYID, PR_DISPLAY_NAME_W, PR_ADDRTYPE_W, PR_EMAIL_ADDRESS_W, strName, strType, strEmail) == hrSuccess;
+ 		
+-		if(lpPropObjectType == NULL || lpPropObjectType->Value.ul == MAPI_MAILUSER) {
+-			// Normal recipient
+-			if (HrGetAddress(lpAdrBook, lpRowSet->aRow[i].lpProps, lpRowSet->aRow[i].cValues,
+-							 PR_ENTRYID, PR_DISPLAY_NAME_W, PR_ADDRTYPE_W, PR_EMAIL_ADDRESS_W,
+-							 strName, strType, strEmail) == hrSuccess)
+-			{
+-
++		if (bAddrFetchSuccess && (lpPropObjectType == NULL || lpPropObjectType->Value.ul == MAPI_MAILUSER || (lpPropObjectType->Value.ul == MAPI_DISTLIST && !bAlwaysExpandDistrList))) {
++			if (bAddrFetchSuccess) {
+ 				if(!strEmail.empty() && setRecips.find(strEmail) == setRecips.end()) {
+ 					recipients.appendMailbox(vmime::create<vmime::mailbox>(convert_to<string>(strEmail)));
+ 					setRecips.insert(strEmail);
+@@ -263,7 +259,7 @@
+ 	if(hr != hrSuccess)
+ 		goto exit;
+ 
+-	hr = HrAddRecipsFromTable(lpAdrBook, lpTable, recipients, setGroups, setRecips, bAllowEveryone);
++	hr = HrAddRecipsFromTable(lpAdrBook, lpTable, recipients, setGroups, setRecips, bAllowEveryone, true);
+ 	if(hr != hrSuccess)
+ 		goto exit;
+ 	
+@@ -283,7 +279,7 @@
+ 	return hr;
+ }
+ 
+-HRESULT ECVMIMESender::HrMakeRecipientsList(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, vmime::mailboxList &recipients, bool bAllowEveryone)
++HRESULT ECVMIMESender::HrMakeRecipientsList(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, vmime::mailboxList &recipients, bool bAllowEveryone, bool bAlwaysExpandDistrList)
+ {
+ 	HRESULT hr = hrSuccess;
+ 	SRestriction sRestriction;
+@@ -320,7 +316,7 @@
+ 			goto exit;
+ 	}
+ 
+-	hr = HrAddRecipsFromTable(lpAdrBook, lpRTable, recipients, setGroups, setRecips, bAllowEveryone);
++	hr = HrAddRecipsFromTable(lpAdrBook, lpRTable, recipients, setGroups, setRecips, bAllowEveryone, true);
+ 	if (hr != hrSuccess)
+ 		goto exit;
+ 	
+@@ -338,7 +334,7 @@
+ // This function does not catch the vmime exception
+ // it should be handled by the calling party.
+ 
+-HRESULT ECVMIMESender::sendMail(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, bool bAllowEveryone)
++HRESULT ECVMIMESender::sendMail(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, bool bAllowEveryone, bool bAlwaysExpandDistrList)
+ {
+ 	HRESULT hr = hrSuccess;
+ 	vmime::mailbox expeditor;
+@@ -386,7 +382,7 @@
+ 			goto exit;
+ 		}
+ 
+-		hr = HrMakeRecipientsList(lpAdrBook, lpMessage, vmMessage, recipients, bAllowEveryone);
++		hr = HrMakeRecipientsList(lpAdrBook, lpMessage, vmMessage, recipients, bAllowEveryone, bAlwaysExpandDistrList);
+ 		if (hr != hrSuccess)
+ 			goto exit;
+ 
+--- zarafa-7.1.14/inetmapi/ECVMIMEUtils.h				2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/inetmapi/ECVMIMEUtils.h.spooler-expand_groups		2016-11-28 22:51:24.000000000 +0100
+@@ -55,15 +55,15 @@
+ {
+ private:
+ 
+-	HRESULT HrMakeRecipientsList(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, vmime::mailboxList &recipients, bool bAllowEveryone);
++	HRESULT HrMakeRecipientsList(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, vmime::mailboxList &recipients, bool bAllowEveryone, bool bAlwaysExpandDistrList);
+ 	HRESULT HrExpandGroup(LPADRBOOK lpAdrBook, LPSPropValue lpGroupName, LPSPropValue lpGroupEntryID, vmime::mailboxList &recipients, std::set<std::wstring> &setGroups, std::set<std::wstring> &setRecips, bool bAllowEveryone);
+-	HRESULT HrAddRecipsFromTable(LPADRBOOK lpAdrBook, IMAPITable *lpTable, vmime::mailboxList &recipients, std::set<std::wstring> &setGroups, std::set<std::wstring> &setRecips, bool bAllowEveryone);
++	HRESULT HrAddRecipsFromTable(LPADRBOOK lpAdrBook, IMAPITable *lpTable, vmime::mailboxList &recipients, std::set<std::wstring> &setGroups, std::set<std::wstring> &setRecips, bool bAllowEveryone, bool bAlwaysExpandDistrList);
+ 
+ public:
+ 	ECVMIMESender(ECLogger *newlpLogger, std::string strSMTPHost, int port);
+ 	virtual	~ECVMIMESender();
+ 
+-	HRESULT sendMail(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, bool bAllowEveryone);
++	HRESULT sendMail(LPADRBOOK lpAdrBook, LPMESSAGE lpMessage, vmime::ref<vmime::message> vmMessage, bool bAllowEveryone, bool bAlwaysExpandDistrList);
+ };
+ 
+ #endif
+--- zarafa-7.1.14/inetmapi/inetmapi.cpp					2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/inetmapi/inetmapi.cpp.spooler-expand_groups		2016-11-28 22:50:04.000000000 +0100
+@@ -331,7 +331,7 @@
+ 		goto exit;
+ 	}
+ 	
+-	hr = mailer->sendMail(lpAddrBook, lpMessage, vmMessage, sopt.allow_send_to_everyone);
++	hr = mailer->sendMail(lpAddrBook, lpMessage, vmMessage, sopt.allow_send_to_everyone, sopt.always_expand_distr_list);
+ 
+ exit:
+ 	delete mToVM;
+--- zarafa-7.1.14/inetmapi/options.h					2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/inetmapi/options.h.spooler-expand_groups		2016-11-28 22:55:44.000000000 +0100
+@@ -68,6 +68,7 @@
+ 	char *charset_upgrade;
+ 	bool allow_send_to_everyone;
+ 	bool enable_dsn;				/**< Enable SMTP Delivery Status Notifications */
++	bool always_expand_distr_list;
+ } sending_options;
+ 
+ void INETMAPI_API imopt_default_delivery_options(delivery_options *dopt);
+--- zarafa-7.1.14/spooler/mailer.cpp					2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/spooler/mailer.cpp.spooler-expand_groups		2016-11-28 22:54:38.000000000 +0100
+@@ -2178,6 +2178,8 @@
+ 	// Enable SMTP Delivery Status Notifications
+ 	sopt.enable_dsn = parseBool(g_lpConfig->GetSetting("enable_dsn"));
+ 
++	sopt.always_expand_distr_list = parseBool(g_lpConfig->GetSetting("expand_groups"));
++
+ 	// Init plugin system
+ 	hr = pyMapiPluginFactory.Init(g_lpConfig, g_lpLogger);
+ 	if (hr != hrSuccess) {
+@@ -2427,7 +2429,7 @@
+ 		 */
+ 	}
+ 
+-	if(parseBool(g_lpConfig->GetSetting("expand_groups"))) {
++	if (sopt.always_expand_distr_list) {
+ 		// Expand recipients with ADDRTYPE=ZARAFA to multiple ADDRTYPE=SMTP recipients
+ 		hr = ExpandRecipients(lpAddrBook, lpMessage);
+ 		if(hr != hrSuccess)
+@@ -2438,7 +2440,7 @@
+ 	if (hr != hrSuccess)
+ 		g_lpLogger->Log(EC_LOGLEVEL_WARNING, "Unable to rewrite recipients");
+ 
+-	if(parseBool(g_lpConfig->GetSetting("expand_groups"))) {
++	if (sopt.always_expand_distr_list) {
+ 		// Only touch recips if we're expanding groups; the rationale is here that the user
+ 		// has typed a recipient twice if we have duplicates and expand_groups = no, so that's
+ 		// what the user wanted apparently. What's more, duplicate recips are filtered for RCPT TO

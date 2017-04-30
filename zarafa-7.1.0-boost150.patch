@@ -1,0 +1,28 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa >= 7.0.6, which allows
+to compile Zarafa 7.0.6 using Boost 1.50. This is neccessary, because Zarafa uses
+Boost filesystem version 2 while it got deprecated with Boost 1.48. However, Boost
+1.50 is still shipping filesystem version 2. For the time being, this allows us to
+compile Zarafa still with newer Boost versions.
+
+--- zarafa-7.1.0/configure			2012-04-22 23:16:00.000000000 +0200
++++ zarafa-7.1.0/configure.boost150		2012-04-22 23:16:38.000000000 +0200
+@@ -31302,7 +31302,7 @@
+ { echo "$as_me:$LINENO: checking boost version compatibility" >&5
+ echo $ECHO_N "checking boost version compatibility... $ECHO_C" >&6; }
+ if test -n "$boost_major_version" -a $boost_major_version -ge 146; then
+-   if test $boost_major_version -ge 149; then
++   if test $boost_major_version -ge 150; then
+    	  { { echo "$as_me:$LINENO: error: boost version is too new" >&5
+ echo "$as_me: error: boost version is too new" >&2;}
+    { (exit 1); exit 1; }; }
+--- zarafa-7.1.0/configure.ac			2012-04-18 18:09:19.000000000 +0200
++++ zarafa-7.1.0/configure.ac.boost150		2012-04-22 23:16:51.000000000 +0200
+@@ -698,7 +698,7 @@
+ BOOST_DATE_TIME([mt])
+ AC_MSG_CHECKING([boost version compatibility])
+ if test -n "$boost_major_version" -a $boost_major_version -ge 146; then
+-   if test $boost_major_version -ge 149; then
++   if test $boost_major_version -ge 150; then
+    	  AC_MSG_ERROR([boost version is too new])
+    fi
+    AC_MSG_RESULT([adding backward compatible flags])

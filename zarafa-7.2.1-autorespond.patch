@@ -1,0 +1,63 @@
+Partial diff between Zarafa 7.2.1 RC1 and RC2 to address a potential local privilege escalation in
+zarafa-autorespond:
+
+ - http://download.zarafa.com/community/beta/7.2/7.2.1-51272/sourcecode/zarafa-7.2.1.tar.gz
+ - http://download.zarafa.com/community/beta/7.2/7.2.1-51665/sourcecode/zarafa-7.2.1.tar.gz
+
+--- zarafa-7.2.1-51272/installer/linux/autorespond		2015-08-05 17:28:49.000000000 +0200
++++ zarafa-7.2.1-51665/installer/linux/autorespond		2015-09-11 10:46:36.000000000 +0200
+@@ -12,11 +12,13 @@
+ # Only send reply to same e-mail address once per 24 hours
+ TIMELIMIT=$[24*60*60]
+ 
++BASE_PATH=/var/lib/zarafa/autorespond
++
+ # File which contains where vacation message was sent
+-SENDDB=${TMP:-/tmp}/zarafa-vacation-$USER.db
++SENDDB=$BASE_PATH/zarafa-vacation-$USER.db
+ 
+ # Tempfile containing message that will be send
+-SENDDBTMP=${TMP:-/tmp}/zarafa-vacation-$USER-$$.tmp
++SENDDBTMP=$BASE_PATH/zarafa-vacation-$USER-$$.tmp
+ 
+ # Customize your actual mail command, normally sendmail
+ # Input to this command is the message to send
+--- zarafa-7.2.1-51272/installer/linux/zarafa-autorespond	2015-08-05 17:28:49.000000000 +0200
++++ zarafa-7.2.1-51665/installer/linux/zarafa-autorespond	2015-09-11 10:46:36.000000000 +0200
+@@ -10,11 +10,21 @@
+ AUTORESPOND_CC=0
+ AUTORESPOND_NORECIP=0
+ TIMELIMIT=$[24*60*60]
+-SENDDB=${TMP:-/tmp}/zarafa-vacation-$USER.db
+-SENDDBTMP=${TMP:-/tmp}/zarafa-vacation-$USER-$$.tmp
++BASE_PATH=/var/lib/zarafa/autorespond
++SENDDB=$BASE_PATH/zarafa-vacation-$USER.db
++SENDDBTMP=$BASE_PATH/zarafa-vacation-$USER-$$.tmp
+ SENDMAILCMD=/usr/sbin/sendmail
+ SENDMAILPARAMS="-t -f"
+ 
++if [ ! -d "$BASE_PATH" ] ; then
++	/usr/bin/logger -p mail.notice -t 'zarafa-autorespond' "Created directory $BASE_PATH"
++	mkdir -p "$BASE_PATH"
++	chmod 750 "$BASE_PATH"
++
++	/usr/bin/logger -p mail.notice -t 'zarafa-autorespond' "Moving existing vacation-files from /tmp to $BASE_PATH"
++	mv -fv /tmp/zarafa-vacation-* "$BASE_PATH/"
++fi
++
+ if [ -r /etc/zarafa/autorespond ]; then
+ 	. /etc/zarafa/autorespond
+ fi
+@@ -49,10 +59,12 @@
+ if [ "$FROM" = "$TO" ]; then
+     exit 0;
+ fi
++
+ shortto=`echo "$TO" | sed -e 's/\(.*\)@.*/\1/' | tr '[A-Z]' '[a-z]'`
+ if [ "$shortto" = "mailer-daemon" -o "$shortto" = "postmaster" -o "$shortto" = "root" ]; then
+     exit 0;
+ fi
++
+ shortfrom=`echo "$FROM" | sed -e 's/\(.*\)@.*/\1/' | tr '[A-Z]' '[a-z]'`
+ if [ "$shortfrom" = "mailer-daemon" -o "$shortfrom" = "postmaster" -o "$shortfrom" = "root" ]; then
+     exit 0;

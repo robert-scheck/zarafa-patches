@@ -1,0 +1,33 @@
+diff -Naurbw zcp-7.1.8beta1-42841/provider/libserver/ECSession.cpp zcp-7.1.8beta2-43059/provider/libserver/ECSession.cpp
+--- zcp-7.1.8beta1-42841/provider/libserver/ECSession.cpp	2013-10-09 15:00:43.000000000 +0200
++++ zcp-7.1.8beta2-43059/provider/libserver/ECSession.cpp	2013-11-08 10:36:52.000000000 +0100
+@@ -865,6 +865,14 @@
+ {
+ 	ECRESULT er = erSuccess;
+ 	
++    if (!lpszName)
++    {
++        // Commandment 2: Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end.
++		m_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Invalid argument lpszName in call to ECAuthSession::ValidateUserLogon()");
++		er = ZARAFA_E_INVALID_PARAMETER;
++		goto exit;
++    }
++
+ 	// SYSTEM can't login with user/pass
+ 	if(stricmp(lpszName, ZARAFA_ACCOUNT_SYSTEM) == 0) {
+ 		er = ZARAFA_E_NO_ACCESS;
+@@ -899,6 +907,14 @@
+ 	char			*ptr = NULL;
+ 	char			*localAdminUsers = NULL;
+ 
++    if (!lpszName)
++    {
++        // Commandment 2: Thou shalt not follow the NULL pointer, for chaos and madness await thee at its end.
++		m_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Invalid argument lpszName in call to ECAuthSession::ValidateUserSocket()");
++		er = ZARAFA_E_INVALID_PARAMETER;
++		goto exit;
++    }
++
+ 	p = m_lpSessionManager->GetConfig()->GetSetting("allow_local_users");
+ 	if (p && !stricmp(p, "yes")) {
+ 		allowLocalUsers = true;

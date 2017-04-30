@@ -1,0 +1,14 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for zarafa-webaccess >= 6.30.0, which
+changes the original paths from Zarafa upstream to Fedora packaging compliant ones.
+
+--- php-webclient-ajax/config.php.dist			2009-03-17 17:30:05.000000000 +0100
++++ php-webclient-ajax/config.php.dist.fedora		2009-04-04 16:36:07.000000000 +0200
+@@ -38,7 +38,7 @@
+ 
+ 	// Defines the temp path (relative). Here uploaded attachments will be saved.
+ 	// The web client doesn't work without this directory.
+-	define('TMP_PATH', BASE_PATH . "tmp");
++	define('TMP_PATH', "/var/lib/zarafa/webaccess/tmp");
+ 
+ 	// Define the server paths
+ 	set_include_path(BASE_PATH. PATH_SEPARATOR . 

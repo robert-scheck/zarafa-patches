@@ -1,7 +1,30 @@
 Patch by Robert Scheck <zarafa@robert-scheck.de> for Zarafa <= 7.1.8 which solves another
 unauthenticated remote Denial of Service vulnerability. At least a Fedora build with this
 patch can no longer be crashed. Note that this patch is not the same as CVE-2014-0037; see
-https://bugzilla.redhat.com/show_bug.cgi?id=1059903 for details.
+https://bugzilla.redhat.com/show_bug.cgi?id=1059903 for details. Traceback example:
+
+zarafa-server[2085]: Caught SIGABRT (6), out of memory or unhandled exception, traceback:
+zarafa-server[2085]: 0x000000080e9c42 /usr/bin/zarafa-server(_Z7sigsegvi+0x92) [0x80e9c42]
+zarafa-server[2085]: 0x00000000130400 [0x130400]
+zarafa-server[2085]: 0x00000000130416 [0x130416]
+zarafa-server[2085]: 0x00000001636af1 /lib/libc.so.6(gsignal+0x51) [0x1636af1]
+zarafa-server[2085]: 0x000000016383ca /lib/libc.so.6(abort+0x17a) [0x16383ca]
+zarafa-server[2085]: 0x00000006c64bc7 /usr/lib/libstdc++.so.6(_ZN9__gnu_cxx27__verbose_terminate_handlerEv+0x167) [0x6c64bc7]
+zarafa-server[2085]: 0x00000006c62a26 /usr/lib/libstdc++.so.6(+0xaea26) [0x6c62a26]
+zarafa-server[2085]: 0x00000006c62a63 /usr/lib/libstdc++.so.6(+0xaea63) [0x6c62a63]
+zarafa-server[2085]: 0x00000006c62ba2 /usr/lib/libstdc++.so.6(+0xaeba2) [0x6c62ba2]
+zarafa-server[2085]: 0x00000006c03240 /usr/lib/libstdc++.so.6(_ZSt19__throw_logic_errorPKc+0x80) [0x6c03240]
+zarafa-server[2085]: 0x00000006c40c22 /usr/lib/libstdc++.so.6(+0x8cc22) [0x6c40c22]
+zarafa-server[2085]: 0x00000006c40d36 /usr/lib/libstdc++.so.6(_ZNSsC1EPKcRKSaIcE+0x46) [0x6c40d36]
+zarafa-server[2085]: 0x000000081daaf9 /usr/bin/zarafa-server(_ZN16ECUserManagement15AuthUserAndSyncEPcS0_Pj+0x1e9) [0x81daaf9]
+zarafa-server[2085]: 0x000000081a4178 /usr/bin/zarafa-server(_ZN13ECAuthSession17ValidateUserLogonEPcS0_S0_+0x78) [0x81a4178]
+zarafa-server[2085]: 0x000000081b1e7a /usr/bin/zarafa-server(_ZN16ECSessionManager13CreateSessionEP4soapPcS2_S2_S2_S2_jyPyPP9ECSessionbb+0x2fa) [0x81b1e7a]
+zarafa-server[2085]: 0x0000000814802e /usr/bin/zarafa-server(_Z9ns__logonP4soapPcS1_S1_S1_jj17xsd__base64BinaryyS1_P13logonResponse+0x18e) [0x814802e]
+zarafa-server[2085]: 0x00000008341539 /usr/bin/zarafa-server(_Z20soap_serve_ns__logonP4soap+0x109) [0x8341539]
+zarafa-server[2085]: 0x000000083426e0 /usr/bin/zarafa-server(_Z18soap_serve_requestP4soap+0x1030) [0x83426e0]
+zarafa-server[2085]: 0x000000080f75f7 /usr/bin/zarafa-server(_ZN14ECWorkerThread4WorkEPv+0x447) [0x80f75f7]
+zarafa-server[2085]: 0x0000000646a9d9 /lib/libpthread.so.0(+0x69d9) [0x646a9d9]
+zarafa-server[2085]: 0x000000016e8cbe /lib/libc.so.6(clone+0x5e) [0x16e8cbe]
 
 --- zarafa-7.1.8/provider/libserver/ECSession.cpp	2014-01-21 15:38:53.000000000 +0100
 +++ zarafa-7.1.8/provider/libserver/ECSession.cpp.rdos	2014-01-29 01:26:49.000000000 +0100
