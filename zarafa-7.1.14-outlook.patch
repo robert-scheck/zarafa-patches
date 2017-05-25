@@ -1,0 +1,660 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.14, which backports the removal of the
+MAPI/Outlook-related dependency to zarafa-licensed in the Zarafa server from Kopano Core. A Zarafa server
+patched using this patch can be accessed using MAPI from Microsoft Outlook when additionally also using the
+Zarafa Outlook Client >= 7.2.3 where Zarafa removed the internal hard dependency to zarafa-licensed.
+
+Practically, Zarafa Outlook Client >= 7.2.3 can be used with Kopano Core (which is fully Open Source); this
+patch just backports exactly this functionality to Zarafa <= 7.1.14. Note that this patch may break other
+proprietary functionalities of Zarafa, such as zarafa-backup/zarafa-restore or multi-server for example...
+
+--- zarafa-7.1.14/provider/common/ECLicenseClient.cpp			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/common/ECLicenseClient.cpp.outlook		2017-05-24 02:29:43.073740379 +0200
+@@ -52,21 +52,10 @@
+ 
+ #include "ECDefs.h"
+ #include "ECChannel.h"
+-#include "base64.h"
+ #include "stringutil.h"
+ 
+ #include "ECLicenseClient.h"
+ 
+-ECLicenseClient::ECLicenseClient(char *szLicensePath, unsigned int ulTimeOut)
+-	: ECChannelClient(szLicensePath, " \t")
+-{
+-	m_ulTimeout = ulTimeOut;
+-}
+-
+-ECLicenseClient::~ECLicenseClient()
+-{
+-}
+-
+ ECRESULT ECLicenseClient::ServiceTypeToServiceTypeString(unsigned int ulServiceType, std::string &strServiceType)
+ {
+     ECRESULT er = erSuccess;
+@@ -88,156 +77,84 @@
+     
+ ECRESULT ECLicenseClient::GetCapabilities(unsigned int ulServiceType, std::vector<std::string > &lstCapabilities)
+ {
+-    ECRESULT er = erSuccess;
+-	std::string strServiceType;
+-
+-	er = ServiceTypeToServiceTypeString(ulServiceType, strServiceType);
+-	if (er != erSuccess)
+-		goto exit;
+-
+-    er = DoCmd("CAPA " + strServiceType, lstCapabilities);
+-
+-exit:
+-    return er;
+-}
+-
+-ECRESULT ECLicenseClient::QueryCapability(unsigned int ulServiceType, const std::string &strCapability, bool *lpbResult)
+-{
+-    ECRESULT er = erSuccess;
++	ECRESULT er;
+ 	std::string strServiceType;
+-	std::vector<std::string> vResult;
+ 
+ 	er = ServiceTypeToServiceTypeString(ulServiceType, strServiceType);
+ 	if (er != erSuccess)
+-		goto exit;
+-
+-    er = DoCmd("QUERY " + strServiceType + " " + strCapability, vResult);
+-    if (er != erSuccess)
+-		goto exit;
+-
+-	*lpbResult = (vResult.front().compare("ENABLED") == 0);
++		return er;
+ 
+-exit:
+-    return er;
++	lstCapabilities.clear();
++	if (ulServiceType == 0) {
++		lstCapabilities.push_back("DEFAULT");
++		lstCapabilities.push_back("OUTLOOK");
++		lstCapabilities.push_back("OLENABLED");
++		lstCapabilities.push_back("BACKUP");
++		lstCapabilities.push_back("GATEWAY");
++		lstCapabilities.push_back("ICAL");
++		lstCapabilities.push_back("REPORT");
++		lstCapabilities.push_back("MIGRATION");
++		lstCapabilities.push_back("WA-ADVANCED-CALENDAR");
++		lstCapabilities.push_back("BES");
++		lstCapabilities.push_back("MULTISERVER");
++		lstCapabilities.push_back("UPDATER");
++		lstCapabilities.push_back("EWS");
++	}
++	return erSuccess;
+ }
+ 
+ ECRESULT ECLicenseClient::GetSerial(unsigned int ulServiceType, std::string &strSerial, std::vector<std::string> &lstCALs)
+ {
+-    ECRESULT er = erSuccess;
+-    std::vector<std::string> lstSerials;
++	ECRESULT er;
+ 	std::string strServiceType;
+ 
+ 	er = ServiceTypeToServiceTypeString(ulServiceType, strServiceType);
+ 	if (er != erSuccess)
+-		goto exit;
++		return er;
+ 
+-    er = DoCmd("SERIAL " + strServiceType, lstSerials);
+-    if(er != erSuccess)
+-        goto exit;
+-
+-    if(lstSerials.empty()) {
+-        strSerial = "";
+-        goto exit;
+-    } else {
+-    	strSerial=lstSerials.front();
+-    	lstSerials.erase(lstSerials.begin());
+-    }
+-    
+-	lstCALs=lstSerials;
++	strSerial = "";
++	lstCALs.clear();
+ 
+-exit:
+-    return er;
++	return erSuccess;
+ }
+ 
+ ECRESULT ECLicenseClient::GetInfo(unsigned int ulServiceType, unsigned int *lpulUserCount)
+ {
+-    ECRESULT er = erSuccess;
+-    std::vector<std::string> lstInfo;
+-    unsigned int ulUserCount = 0;
+-    unsigned int ulTrialtime = 0;
++	ECRESULT er;
+ 	std::string strServiceType;
+ 
+ 	er = ServiceTypeToServiceTypeString(ulServiceType, strServiceType);
+ 	if (er != erSuccess)
+-		goto exit;
+-
+-
+-    er = DoCmd("INFO " + strServiceType, lstInfo);
+-    if(er != erSuccess)
+-        goto exit;
++		return er;
+ 
+-    if(lstInfo.empty()) {
+-        er = ZARAFA_E_INVALID_PARAMETER;
+-        goto exit;
+-    }
+-        
+-    ulUserCount = atoi(lstInfo.front().c_str());
+-    lstInfo.erase(lstInfo.begin());
+-    
+-/*    if(!lstInfo.empty()) {
+-        if(lstInfo.front() == "TRIALTIME") {
+-            lstInfo.erase(lstInfo.begin());
+-            if(!lstInfo.empty())
+-                ulTrialtime = atoi(lstInfo.front().c_str());
+-        }
+-    }
+-  */  
+-    if(lpulUserCount)
+-        *lpulUserCount = ulUserCount;
+-    //if(lpulTrialtime)
+-      //  *lpulTrialtime = ulTrialtime;
+-
+-exit:    
+-    return er;
++	*lpulUserCount = 65535;
++	return erSuccess;
+ }
+ 
+-ECRESULT ECLicenseClient::Auth(unsigned char *lpData, unsigned int ulSize, unsigned char **lppResponse, unsigned int *lpulResponseSize)
+-{
+-    ECRESULT er = erSuccess;
+-    std::vector<std::string> lstAuth;
+-    std::string strDecoded;
+-    unsigned char *lpResponse = NULL;
+-    
+-    er = DoCmd((std::string)"AUTH " + base64_encode(lpData, ulSize), lstAuth);
+-    if(er != erSuccess)
+-        goto exit;
+-        
+-    if(lstAuth.empty()) {
+-        er = ZARAFA_E_INVALID_PARAMETER;
+-        goto exit;
+-    }
+-    
+-    strDecoded = base64_decode(lstAuth.front());
+-
+-    lpResponse = new unsigned char [strDecoded.size()];
+-    memcpy(lpResponse, strDecoded.c_str(), strDecoded.size());
+-    
+-    if(lppResponse)
+-        *lppResponse = lpResponse;
+-    if(lpulResponseSize)
+-        *lpulResponseSize = strDecoded.size();
+-
+-exit:
+-    return er;
++struct LICENSERESPONSE {
++	unsigned int ulVersion;			// Current: LICENSERESPONSE_VERSION
++	unsigned int ulTrackingId;
++	unsigned long long llFlags;
++	unsigned int ulStatus;
++	char szPadding[4];				// Make sure the struct is padded to a multiple of 8 bytes
++};
++
++ECRESULT ECLicenseClient::Auth(const unsigned char *lpData,
++    unsigned int ulSize, void **lppResponse, unsigned int *lpulResponseSize)
++{
++	*lppResponse = calloc(1, sizeof(LICENSERESPONSE));
++	*lpulResponseSize = sizeof(LICENSERESPONSE);
++	return erSuccess;
+ }
+ 
+ ECRESULT ECLicenseClient::SetSerial(unsigned int ulServiceType, const std::string &strSerial, const std::vector<std::string> &lstCALs)
+ {
+-	ECRESULT er = erSuccess;
++	ECRESULT er;
+ 	std::string strServiceType;
+-	std::string strCommand;
+-	std::vector<std::string> lstRes;
+ 
+ 	er = ServiceTypeToServiceTypeString(ulServiceType, strServiceType);
+ 	if (er != erSuccess)
+-		goto exit;
+-
+-	strCommand = "SETSERIAL " + strServiceType + " " + strSerial;
+-	for (std::vector<std::string>::const_iterator iCAL = lstCALs.begin(); iCAL != lstCALs.end(); ++iCAL)
+-		strCommand.append(" " + *iCAL);
+-
+-	er = DoCmd(strCommand, lstRes);
++		return er;
+ 
+-exit:
+-	return er;
++	return erSuccess;
+ }
+--- zarafa-7.1.14/provider/common/ECLicenseClient.h			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/common/ECLicenseClient.h.outlook		2017-05-24 02:30:16.395470068 +0200
+@@ -51,16 +51,14 @@
+ #include "ECChannelClient.h"
+ #include "ZarafaCode.h"
+ 
+-class ECLicenseClient : public ECChannelClient{
++class ECLicenseClient {
+ public:
+-    ECLicenseClient(char *szLicensePath, unsigned int ulTimeOut);
+-    ~ECLicenseClient();
+-    
++    ECLicenseClient(const char * = NULL, unsigned int = 0) {}
++
+     ECRESULT GetCapabilities(unsigned int ulServiceType, std::vector<std::string > &lstCapabilities);
+-    ECRESULT QueryCapability(unsigned int ulServiceType, const std::string &strCapability, bool *lpbResult);
+     ECRESULT GetSerial(unsigned int ulServiceType, std::string &lpstrSerial, std::vector<std::string> &lstCALs);
+     ECRESULT GetInfo(unsigned int ulServiceType, unsigned int *lpulUserCount);
+-    ECRESULT Auth(unsigned char *lpData, unsigned int ulSize, unsigned char **lpResponse, unsigned int *lpulResponseSize);
++    ECRESULT Auth(const unsigned char *lpData, unsigned int ulSize, void **ret, unsigned int *retsize);
+     ECRESULT SetSerial(unsigned int ulServiceType, const std::string &strSerial, const std::vector<std::string> &lstCALs);
+ 
+ private:
+--- zarafa-7.1.14/provider/libserver/ECSessionManager.cpp		2015-10-20 11:13:46.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ECSessionManager.cpp.outlook	2017-05-24 03:51:11.969263121 +0200
+@@ -1501,21 +1501,13 @@
+ 
+ ECRESULT ECSessionManager::GetLicensedUsers(unsigned int ulServiceType, unsigned int* lpulLicensedUsers)
+ {
+-	ECRESULT er = erSuccess;
+ 	unsigned int ulLicensedUsers = 0;
+ 
+-    ECLicenseClient *lpLicenseClient = NULL;
+-	lpLicenseClient = new ECLicenseClient(GetConfig()->GetSetting("license_socket"), atoui(GetConfig()->GetSetting("license_timeout")) );
+-	
+-	er = lpLicenseClient->GetInfo(ulServiceType, &ulLicensedUsers);
+-	
++	unsigned int er = ECLicenseClient().GetInfo(ulServiceType, &ulLicensedUsers);
+ 	if(er != erSuccess) {
+ 	    ulLicensedUsers = 0;
+ 	    er = erSuccess;
+ 	}
+-	
+-	delete lpLicenseClient;
+-
+ 	*lpulLicensedUsers = ulLicensedUsers;
+ 
+ 	return er;
+--- zarafa-7.1.14/provider/libserver/ZarafaCmd.cpp			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ZarafaCmd.cpp.outlook		2017-05-24 03:42:23.590332425 +0200
+@@ -600,27 +600,6 @@
+ 	if (clientCaps & ZARAFA_CAP_MSGLOCK)
+ 		lpsResponse->ulCapabilities |= ZARAFA_CAP_MSGLOCK;
+ 
+-    if(sLicenseRequest.__size) {
+-        lpLicenseClient = new ECLicenseClient(g_lpSessionManager->GetConfig()->GetSetting("license_socket"), atoui(g_lpSessionManager->GetConfig()->GetSetting("license_timeout")));
+-        
+-        er = lpLicenseClient->Auth(sLicenseRequest.__ptr, sLicenseRequest.__size, &lpLicenseResponse, &ulLicenseResponse);
+-
+-        // If the license server is not running, report this as no access.
+-        if(er == ZARAFA_E_NETWORK_ERROR)
+-            er = ZARAFA_E_NO_ACCESS;
+-
+-		// kill license client, so we close the socket early
+-		delete lpLicenseClient;
+-        
+-        if(er != erSuccess) {
+-            g_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Client requested license but zarafa-licensed could not be contacted");
+-            goto exit; // Note that Auth() succeeds even if the client request was denied. An error here is a real parsing error for example.
+-        }
+-        
+-        lpsResponse->sLicenseResponse.__size = ulLicenseResponse;
+-        lpsResponse->sLicenseResponse.__ptr = (unsigned char *)s_memcpy(soap, (const char *)lpLicenseResponse, ulLicenseResponse);
+-    }
+-
+ 	er = g_lpSessionManager->GetServerGUID(&sServerGuid);
+ 	if (er != erSuccess)
+ 		goto exit;
+@@ -636,9 +615,6 @@
+ 	if (lpecSession)
+ 		lpecSession->Unlock();
+         
+-    if(lpLicenseResponse)
+-        delete [] lpLicenseResponse;
+-
+ 	lpsResponse->er = er;
+ 
+ 	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &endTimes);
+@@ -702,22 +678,6 @@
+ 		lpsResponse->lpOutput = lpOutput;
+ 	} else if (er == erSuccess) {
+ 		// done and logged in
+-        if(sLicenseRequest.__size) {
+-            lpLicenseClient = new ECLicenseClient(g_lpSessionManager->GetConfig()->GetSetting("license_socket"), atoui(g_lpSessionManager->GetConfig()->GetSetting("license_timeout")));
+-            
+-            er = lpLicenseClient->Auth(sLicenseRequest.__ptr, sLicenseRequest.__size, &lpsResponse->sLicenseResponse.__ptr, (unsigned int *)&lpsResponse->sLicenseResponse.__size);
+-            // If the license server is not running, report this as no access.
+-            if(er == ZARAFA_E_NETWORK_ERROR)
+-                er = ZARAFA_E_NO_ACCESS;
+-
+-			// kill license client, so we close the socket early
+-			delete lpLicenseClient;
+-            
+-            if(er != erSuccess) {
+-                g_lpSessionManager->GetLogger()->Log(EC_LOGLEVEL_FATAL, "Client requested license but zarafa-licensed could not be contacted");
+-                goto exit; // Note that Auth() succeeds even if the client request was denied. An error here is a real parsing error for example.
+-            }
+-        }
+ 
+ 		// create ecsession from ecauthsession, and place in session map
+ 		er = g_lpSessionManager->RegisterSession(lpecAuthSession, ullSessionGroup, szClientVersion, szClientApp, &newSessionID, &lpecSession, true);
+@@ -10369,61 +10329,39 @@
+ 
+ SOAP_ENTRY_START(getLicenseAuth, lpsResponse->er, struct xsd__base64Binary sAuthData, struct getLicenseAuthResponse *lpsResponse)
+ {
+-    ECLicenseClient *lpLicenseClient = new ECLicenseClient(g_lpSessionManager->GetConfig()->GetSetting("license_socket"), atoui(g_lpSessionManager->GetConfig()->GetSetting("license_timeout")));
+-	unsigned char *data = NULL;
+-
+-    er = lpLicenseClient->Auth(sAuthData.__ptr, sAuthData.__size, &data, (unsigned int *)&lpsResponse->sAuthResponse.__size);
+-    if(er != erSuccess)
+-        goto exit;
+-
+-	lpsResponse->sAuthResponse.__ptr = s_alloc<unsigned char>(soap, lpsResponse->sAuthResponse.__size);
+-	memcpy(lpsResponse->sAuthResponse.__ptr, data, lpsResponse->sAuthResponse.__size);
+-
+-exit:
+-	if (data)
+-		delete [] data;
+-
+-    delete lpLicenseClient;
++	lpsResponse->sAuthResponse.__ptr = NULL;
++	lpsResponse->sAuthResponse.__size = 0;
+ }
+ SOAP_ENTRY_END()
+ 
+ SOAP_ENTRY_START(getLicenseCapa, lpsResponse->er, unsigned int ulServiceType, struct getLicenseCapaResponse *lpsResponse)
+ {
+-    ECLicenseClient *lpLicenseClient = new ECLicenseClient(g_lpSessionManager->GetConfig()->GetSetting("license_socket"), atoui(g_lpSessionManager->GetConfig()->GetSetting("license_timeout")));
+     std::vector<std::string> lstCapabilities;
+ 
+-    er = lpLicenseClient->GetCapabilities(ulServiceType, lstCapabilities);
++    er = ECLicenseClient().GetCapabilities(ulServiceType, lstCapabilities);
+     if(er != erSuccess)
+-        goto exit;
++        return er;
+         
+     lpsResponse->sCapabilities.__size = lstCapabilities.size();
+     lpsResponse->sCapabilities.__ptr = s_alloc<char *>(soap, lstCapabilities.size());
+-    
+-    for(unsigned int i=0; i<lstCapabilities.size(); i++) {
+-        lpsResponse->sCapabilities.__ptr[i] = s_strcpy(soap, lstCapabilities[i].c_str());
+-    }
+-exit:
+ 
+-    delete lpLicenseClient;
++    for (unsigned int i = 0; i < lstCapabilities.size(); ++i)
++        lpsResponse->sCapabilities.__ptr[i] = s_strcpy(soap, lstCapabilities[i].c_str());
++    return erSuccess;
+ }
+ SOAP_ENTRY_END()
+ 
+ SOAP_ENTRY_START(getLicenseUsers, lpsResponse->er, unsigned int ulServiceType, struct getLicenseUsersResponse *lpsResponse)
+ {
+ 	unsigned int ulUsers = 0;
+-
+-	ECLicenseClient *lpLicenseClient = new ECLicenseClient(g_lpSessionManager->GetConfig()->GetSetting("license_socket"), atoui(g_lpSessionManager->GetConfig()->GetSetting("license_timeout")));
+ 	std::vector<std::string> lstCapabilities;
+ 
+-	er = lpLicenseClient->GetInfo(ulServiceType, &ulUsers);
++	er = ECLicenseClient().GetInfo(ulServiceType, &ulUsers);
+ 	if(er != erSuccess)
+-		goto exit;
++		return er;
+ 
+ 	lpsResponse->ulUsers = ulUsers;
+-
+-exit:
+-
+-	delete lpLicenseClient;
++	return erSuccess;
+ }
+ SOAP_ENTRY_END()
+ 
+--- zarafa-7.1.14/provider/server/ECClientUpdate.cpp			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/server/ECClientUpdate.cpp.outlook		2017-05-24 02:53:00.132504390 +0200
+@@ -94,9 +94,8 @@
+ 	std::string strLicenseRequest;
+ 	std::string strLicenseResponse;
+ 
+-	ECLicenseClient *lpLicenseClient = NULL;
+ 	unsigned int ulLicenseResponse = 0;
+-	unsigned char *lpLicenseResponse = NULL;
++	void *lpLicenseResponse = NULL;
+ 	ECRESULT er = erSuccess;
+ 	ClientVersion currentVersion = {0};
+ 	ClientVersion latestVersion = {0};
+@@ -129,14 +128,14 @@
+ 		}
+ 		strLicenseRequest = base64_decode(std::string(szReq, szReqEnd - szReq));
+ 
+-		lpLicenseClient = new ECLicenseClient(g_lpConfig->GetSetting("license_socket"),  atoui(g_lpConfig->GetSetting("license_timeout")));
+-		er = lpLicenseClient->Auth((unsigned char*)strLicenseRequest.c_str(), strLicenseRequest.length(), &lpLicenseResponse, &ulLicenseResponse);
++		er = ECLicenseClient(g_lpConfig->GetSetting("license_socket"),  atoui(g_lpConfig->GetSetting("license_timeout")))
++		    .Auth((unsigned char*)strLicenseRequest.c_str(), strLicenseRequest.length(), &lpLicenseResponse, &ulLicenseResponse);
+ 		if (er != erSuccess) {
+ 			g_lpLogger->Log(EC_LOGLEVEL_DEBUG, "Client update: Invalid license request, error: 0x%08X.", er);
+ 			goto exit;
+ 		}
+ 
+-		strLicenseResponse = base64_encode(lpLicenseResponse, ulLicenseResponse);
++		strLicenseResponse = base64_encode(static_cast<const unsigned char *>(lpLicenseResponse), ulLicenseResponse);
+ 
+ 		soap->http_content = "binary";
+ 		soap_response(soap, SOAP_FILE);
+@@ -214,11 +213,7 @@
+ 	nRet = SOAP_OK;
+ 
+ exit:
+-	if (lpLicenseResponse)
+-		delete [] lpLicenseResponse;
+-
+-	if (lpLicenseClient)
+-		delete lpLicenseClient;
++	free(lpLicenseResponse);
+ 
+ 	if (fd)
+ 		fclose(fd);
+@@ -432,8 +427,7 @@
+ 	ClientVersion sCurrentVersion = {0};
+ 	ClientVersion sLatestVersion;
+ 	unsigned int ulLicenseResponse = 0;
+-	unsigned char *lpLicenseResponse = NULL;
+-	ECLicenseClient *lpLicenseClient = NULL;
++	void *lpLicenseResponse = NULL;
+ 	std::string strClientMSIName;
+ 	std::string strPath;
+ 	FILE *fd = NULL;
+@@ -541,8 +535,8 @@
+ 		}
+ 	}
+ 
+-	lpLicenseClient = new ECLicenseClient(g_lpConfig->GetSetting("license_socket"),  atoui(g_lpConfig->GetSetting("license_timeout")));
+-	er = lpLicenseClient->Auth(sClientUpdateInfo.sLicenseReq.__ptr, sClientUpdateInfo.sLicenseReq.__size, &lpLicenseResponse, &ulLicenseResponse);
++	er = ECLicenseClient(g_lpConfig->GetSetting("license_socket"),  atoui(g_lpConfig->GetSetting("license_timeout")))
++	    .Auth(sClientUpdateInfo.sLicenseReq.__ptr, sClientUpdateInfo.sLicenseReq.__size, &lpLicenseResponse, &ulLicenseResponse);
+ 	if (er != erSuccess) {
+ 		g_lpLogger->Log(EC_LOGLEVEL_ERROR, "Client update: trackid: 0x%08X, Invalid license request, error: 0x%08X.", sClientUpdateInfo.ulTrackId, er);
+ 		goto exit;
+@@ -628,13 +622,7 @@
+ 	}
+ 
+ 	lpsResponse->er = er;
+-
+-	if (lpLicenseResponse)
+-		delete [] lpLicenseResponse;
+-
+-	if (lpLicenseClient)
+-		delete lpLicenseClient;
+-
++	free(lpLicenseResponse);
+ 	if (er && fd)
+ 		fclose(fd);
+ 
+--- zarafa-7.1.14/provider/server/ECServer.cpp				2017-05-24 02:10:44.032026217 +0200
++++ zarafa-7.1.14/provider/server/ECServer.cpp.outlook			2017-05-24 03:53:52.248027085 +0200
+@@ -823,11 +823,6 @@
+ 	bool			bPipeEnabled = false;
+ 	bool			bTCPEnabled = false;
+ 
+-	// License
+-	ECLicenseClient *lpLicense = NULL;
+-	std::string		strSerial;
+-	std::vector<std::string> lstCALs;
+-	
+ 	bool			hosted = false;
+ 	bool			distributed = false;
+ 
+@@ -1172,18 +1167,6 @@
+ 	hosted = parseBool(g_lpConfig->GetSetting("enable_hosted_zarafa"));
+ 	distributed = parseBool(g_lpConfig->GetSetting("enable_distributed_zarafa"));
+ 
+-	lpLicense = new ECLicenseClient(g_lpConfig->GetSetting("license_socket"), atoui(g_lpConfig->GetSetting("license_timeout")) );
+-
+-	if(lpLicense->GetSerial(0 /*SERVICE_TYPE_ZCP*/, strSerial, lstCALs) != erSuccess) {
+-	    g_lpLogger->Log(EC_LOGLEVEL_FATAL, "WARNING: zarafa-licensed not running, commercial features will not be available until it's started.");
+-	} else {
+-		if (!strSerial.empty())
+-			g_lpLogger->Log(EC_LOGLEVEL_FATAL, "Using commercial license serial '%s'", strSerial.c_str());
+-		else
+-			g_lpLogger->Log(EC_LOGLEVEL_FATAL, "zarafa-licensed is running, but no license key was found. Not all commercial features will be available.");
+-	}
+-
+-
+ 	// Set max open file descriptors to FD_SETSIZE .. higher than this number
+ 	// is a bad idea, as it will start breaking select() calls.
+ 	struct rlimit limit;
+@@ -1259,32 +1242,6 @@
+ 		signal(SIGPIPE, process_signal);
+ 	}
+ 
+-	// Check if we're licensed to run distributed mode. The license daemon might
+-	// not be running (yet), so try for a minute before giving up.
+-	if (distributed) {
+-		for (int i = 0; i < 30; ++i) {
+-			bool bLicensed = false;
+-			er = lpLicense->QueryCapability(0 /*SERVICE_TYPE_ZCP*/, "MULTISERVER", &bLicensed);
+-			if (er != erSuccess) {
+-				if (i < 29) {
+-					g_lpLogger->Log(EC_LOGLEVEL_FATAL, "WARNING: Unable to determine if distributed features are allowed, waiting 2s for retry. (attempt %u/30)", i + 1);
+-					sleep_ms(2000);
+-				} else {
+-					g_lpLogger->Log(EC_LOGLEVEL_FATAL, "Failed to determine if distributed features are allowed, assuming unavailable.");
+-					retval = -1;
+-					goto exit;
+-				}
+-			} else {
+-				if (!bLicensed) {
+-					g_lpLogger->Log(EC_LOGLEVEL_FATAL, "Your license key does not allow the usage of the distributed features.");
+-					retval = -1;
+-					goto exit;
+-				}
+-				break;
+-			}
+-		}
+-	}
+-
+ 	// ignore ignorable signals that might stop the server during database upgrade
+ 	// all these signals will be reset after the database upgrade part.
+ 	m_bDatabaseUpdateIgnoreSignals = true;
+@@ -1449,7 +1406,6 @@
+ 
+ 	delete g_lpScheduler;
+ 
+-	delete lpLicense;
+ 	if(st.ss_sp)
+ 		free(st.ss_sp);
+ 	delete lpDatabase;
+--- zarafa-7.1.14/swig/python/licenseclient.py				2015-10-20 10:35:58.000000000 +0200
++++ zarafa-7.1.14/swig/python/licenseclient.py.outlook			2017-05-24 03:10:01.542463696 +0200
+@@ -80,7 +80,6 @@
+     def GetSerial(self, *args): return _licenseclient.ECLicenseClient_GetSerial(self, *args)
+     def GetInfo(self, *args): return _licenseclient.ECLicenseClient_GetInfo(self, *args)
+     def SetSerial(self, *args): return _licenseclient.ECLicenseClient_SetSerial(self, *args)
+-    def Auth(self, *args): return _licenseclient.ECLicenseClient_Auth(self, *args)
+     __swig_destroy__ = _licenseclient.delete_ECLicenseClient
+     __del__ = lambda self : None;
+ ECLicenseClient_swigregister = _licenseclient.ECLicenseClient_swigregister
+--- zarafa-7.1.14/swig/python/licenseclient_wrap.cxx			2015-10-20 10:35:58.000000000 +0200
++++ zarafa-7.1.14/swig/python/licenseclient_wrap.cxx.outlook		2017-05-24 03:09:55.799508924 +0200
+@@ -3486,67 +3486,6 @@
+ }
+ 
+ 
+-SWIGINTERN PyObject *_wrap_ECLicenseClient_Auth(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+-  PyObject *resultobj = 0;
+-  ECLicenseClient *arg1 = (ECLicenseClient *) 0 ;
+-  unsigned char *arg2 = (unsigned char *) 0 ;
+-  unsigned int arg3 ;
+-  unsigned char **arg4 = (unsigned char **) 0 ;
+-  unsigned int *arg5 = (unsigned int *) 0 ;
+-  void *argp1 = 0 ;
+-  int res1 = 0 ;
+-  int res2 ;
+-  char *buf2 = 0 ;
+-  size_t size2 ;
+-  int alloc2 = 0 ;
+-  unsigned char *temp4 = 0 ;
+-  unsigned int tempn4 ;
+-  PyObject * obj0 = 0 ;
+-  PyObject * obj1 = 0 ;
+-  char ex[64] ;
+-  ECRESULT result;
+-  
+-  arg4 = &temp4; arg5 = &tempn4;
+-  if (!PyArg_ParseTuple(args,(char *)"OO:ECLicenseClient_Auth",&obj0,&obj1)) SWIG_fail;
+-  res1 = SWIG_ConvertPtr(obj0, &argp1,SWIGTYPE_p_ECLicenseClient, 0 |  0 );
+-  if (!SWIG_IsOK(res1)) {
+-    SWIG_exception_fail(SWIG_ArgError(res1), "in method '" "ECLicenseClient_Auth" "', argument " "1"" of type '" "ECLicenseClient *""'"); 
+-  }
+-  arg1 = reinterpret_cast< ECLicenseClient * >(argp1);
+-  {
+-    res2 = SWIG_AsCharPtrAndSize(obj1, &buf2, &size2, &alloc2);
+-    if (!SWIG_IsOK(res2)) {
+-      SWIG_exception_fail(SWIG_ArgError(res2), "in method '" "ECLicenseClient_Auth" "', argument " "2"" of type '" "unsigned char *""'");
+-    }
+-    if(buf2 == NULL) {
+-      arg2 = NULL;
+-      arg3 = 0;
+-    } else {
+-      arg2 = reinterpret_cast< unsigned char * >(buf2);
+-      arg3 = static_cast< unsigned int >(size2 - 1);
+-    }
+-  }
+-  {
+-    SWIG_PYTHON_THREAD_BEGIN_ALLOW;
+-    result = (arg1)->Auth(arg2,arg3,arg4,arg5);
+-    SWIG_PYTHON_THREAD_END_ALLOW;
+-  }
+-  {
+-    if(FAILED(result)) {
+-      snprintf(ex,sizeof(ex),"failed with ECRESULT 0x%08X", result);
+-      SWIG_exception(SWIG_RuntimeError, ex);
+-    }
+-  }
+-  if (*arg4) {
+-    resultobj = SWIG_Python_AppendOutput(resultobj, SWIG_FromBytePtrAndSize(*arg4,*arg5));
+-    delete[] *arg4;
+-  }
+-  return resultobj;
+-fail:
+-  return NULL;
+-}
+-
+-
+ SWIGINTERN PyObject *_wrap_delete_ECLicenseClient(PyObject *SWIGUNUSEDPARM(self), PyObject *args) {
+   PyObject *resultobj = 0;
+   ECLicenseClient *arg1 = (ECLicenseClient *) 0 ;
+@@ -3586,7 +3525,6 @@
+ 	 { (char *)"ECLicenseClient_GetSerial", _wrap_ECLicenseClient_GetSerial, METH_VARARGS, NULL},
+ 	 { (char *)"ECLicenseClient_GetInfo", _wrap_ECLicenseClient_GetInfo, METH_VARARGS, NULL},
+ 	 { (char *)"ECLicenseClient_SetSerial", _wrap_ECLicenseClient_SetSerial, METH_VARARGS, NULL},
+-	 { (char *)"ECLicenseClient_Auth", _wrap_ECLicenseClient_Auth, METH_VARARGS, NULL},
+ 	 { (char *)"delete_ECLicenseClient", _wrap_delete_ECLicenseClient, METH_VARARGS, NULL},
+ 	 { (char *)"ECLicenseClient_swigregister", ECLicenseClient_swigregister, METH_VARARGS, NULL},
+ 	 { NULL, NULL, 0, NULL }
