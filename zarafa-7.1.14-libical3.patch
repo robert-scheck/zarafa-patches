@@ -1,0 +1,363 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.14 which backports the support for
+libical 3.0.x from Kopano Core 8.x. This patch only exists, because Red Hat decided (by bumping libical
+from 1.0.1 to 3.0.3) to silently break the API of libical in Red Hat Enterprise Linux 7. It was silent,
+because the rebase is not mentioned in any release notes for Red Hat Enterprise Linux 7.x. Unfortunately,
+the compat-libical1 RPM package provides only a run-time compatibility library, but not a build-time one.
+
+And finally, the backports from Kopano Core 8.x introduce a dependency on C++11 due to "nullptr", which
+requires some more source code changes to make Zarafa compiling using the -std=c++11 option. The last two
+parts of this patch just avoid running autoconf and are generated results.
+
+Technically, this patch is inspired by the following patches from Kopano Core 8.x:
+
+ - https://github.com/Kopano-dev/kopano-core/commit/e90693bfd57644297cc2f52277101d935b242921
+ - https://github.com/Kopano-dev/kopano-core/commit/0768d5d5a0496a91004ea3559281f41421f468dc
+ - https://github.com/Kopano-dev/kopano-core/commit/00d3efa21ce8c063f11f9d3b92be75e8147d3faa
+ - https://github.com/Kopano-dev/kopano-core/commit/d9dc1cb404959846979f50aef9d3fece5865781d
+
+This patch is is free software: You can redistribute it and/or modify it under the terms of the GNU Affero
+General Public License, version 3, as published by the Free Software Foundation.
+
+--- zarafa-7.1.14/common/ECLogger.h					2015-10-20 11:13:43.000000000 +0200
++++ zarafa-7.1.14/common/ECLogger.h.libical3				2021-03-24 21:56:23.232044349 +0100
+@@ -81,8 +81,8 @@
+ #define _LOG_BUFSIZE		10240
+ #define _LOG_TSSIZE			64
+ 
+-#define LOG_DEBUG(_plog,_msg,...) if ((_plog)->Log(EC_LOGLEVEL_DEBUG)) (_plog)->Log(EC_LOGLEVEL_DEBUG, _msg, ##__VA_ARGS__)
+-#define LOG_AUDIT(_plog,_msg,...) if ((_plog)) (_plog)->Log(EC_LOGLEVEL_FATAL, _msg, ##__VA_ARGS__)
++#define LOG_DEBUG(_plog,msg,...) if ((_plog)->Log(EC_LOGLEVEL_DEBUG)) (_plog)->Log(EC_LOGLEVEL_DEBUG, msg, ##__VA_ARGS__)
++#define LOG_AUDIT(_plog,msg,...) if ((_plog)) (_plog)->Log(EC_LOGLEVEL_FATAL, msg, ##__VA_ARGS__)
+ 
+ #ifdef UNICODE
+ #define TSTRING_PRINTF "%ls"
+--- zarafa-7.1.14/common/rtfutil.cpp					2015-10-20 11:13:44.000000000 +0200
++++ zarafa-7.1.14/common/rtfutil.cpp.libical3				2021-03-24 21:34:41.350262220 +0100
+@@ -286,7 +286,7 @@
+                     sState[ulState].szCharset = szANSICharset;
+ 				} else if(strcmp(szCommand,"fcharset") == 0) {
+ 					if(sState[ulState].bInFontTbl) {
+-						mapFontToCharset.insert(make_pair<int,int>(sState[ulState].ulFont, lArg));
++						mapFontToCharset.insert(make_pair(sState[ulState].ulFont, lArg));
+ 					}
+ 				} else if(strcmp(szCommand,"htmltag") == 0) {
+ 				} else if(strcmp(szCommand,"mhtmltag") == 0) {
+@@ -538,7 +538,7 @@
+                     sState[ulState].szCharset = szANSICharset;
+ 				} else if(strcmp(szCommand,"fcharset") == 0) {
+ 					if(sState[ulState].bInFontTbl) {
+-						mapFontToCharset.insert(make_pair<int,int>(sState[ulState].ulFont, lArg));
++						mapFontToCharset.insert(make_pair(sState[ulState].ulFont, lArg));
+ 					}
+ 				} else if(strcmp(szCommand,"htmltag") == 0) {
+ 				} else if(strcmp(szCommand,"mhtmltag") == 0) {
+@@ -847,7 +847,7 @@
+ 					sState[ulState].szCharset = szANSICharset;
+ 				} else if(strcmp(szCommand,"fcharset") == 0) {
+ 					if(sState[ulState].bInFontTbl) {
+-						mapFontToCharset.insert(make_pair<int,int>(sState[ulState].ulFont, lArg));
++						mapFontToCharset.insert(make_pair(sState[ulState].ulFont, lArg));
+ 					}
+ 				} else if(strcmp(szCommand,"htmltag") == 0) {
+ 				} else if(strcmp(szCommand,"latentstyles") == 0) {
+@@ -1191,7 +1191,7 @@
+ 					sState[ulState].szCharset = szANSICharset;
+ 				} else if(strcmp(szCommand,"fcharset") == 0) {
+ 					if(sState[ulState].bInFontTbl) {
+-						mapFontToCharset.insert(make_pair<int,int>(sState[ulState].ulFont, lArg));
++						mapFontToCharset.insert(make_pair(sState[ulState].ulFont, lArg));
+ 					}
+ 				} else if(strcmp(szCommand,"htmltag") == 0) {
+ 				} else if(strcmp(szCommand,"mhtmltag") == 0) {
+--- zarafa-7.1.14/configure.ac						2015-10-20 10:35:08.000000000 +0200
++++ zarafa-7.1.14/configure.ac.libical3					2021-03-24 21:04:19.288964999 +0100
+@@ -93,6 +93,15 @@
+ LFS_CFLAGS=`getconf LFS_CFLAGS`
+ ZCPPFLAGS="$ZCPPFLAGS $LFS_CFLAGS"
+ 
++# Backport of libical 3.0.x support from Kopano needs at least C++11
++AC_MSG_CHECKING([whether C++ compiler understands -std=c++11 option])
++AC_LANG_PUSH([C++])
++CXXFLAGS="$ZCXXFLAGS -std=c++11"
++AC_COMPILE_IFELSE([AC_LANG_SOURCE([])], [AC_MSG_RESULT([yes])], [AC_MSG_ERROR([at least C++11 is needed])])
++CXXFLAGS="$ZCXXFLAGS"
++ZCXXFLAGS="$ZCXXFLAGS -std=c++11"
++AC_LANG_POP([C++])
++
+ # disable variadic-macros: too much warning: anonymous variadic macros were introduced in C99, only on new compilers
+ AC_MSG_CHECKING([whether C++ compiler understands -Wno-variadic-macros option])
+ if ( echo 'int main() {}' | $CXX -Wno-variadic-macros -E - >/dev/null 2>&1 ); then
+--- zarafa-7.1.14/ECtools/zarafa-search/ECServerIndexer.cpp		2015-10-20 11:13:42.000000000 +0200
++++ zarafa-7.1.14/ECtools/zarafa-search/ECServerIndexer.cpp.libical3	2021-03-24 22:09:21.447493538 +0100
+@@ -1113,7 +1113,7 @@
+         goto exit;
+     }
+ 
+-	m_listRebuildStores.push_back(make_pair<std::string, std::string>(strServerGuid, strStoreGuid));
++	m_listRebuildStores.push_back(make_pair(strServerGuid, strStoreGuid));
+     pthread_cond_signal(&m_condRebuild);
+ 
+ exit:
+--- zarafa-7.1.14/libicalmapi/icalcompat.h				1970-01-01 01:00:00.000000000 +0100
++++ zarafa-7.1.14/libicalmapi/icalcompat.h.libical3			2021-03-24 20:08:34.242068922 +0100
+@@ -0,0 +1,15 @@
++#ifndef ICALMAPI_ICALCOMPAT_H
++#define ICALMAPI_ICALCOMPAT_H 1
++
++#include <libical/ical.h>
++
++template<typename T> static inline void ical_utc(T &r, bool utc)
++{
++#if defined(ICAL_MAJOR_VERSION) && ICAL_MAJOR_VERSION < 3
++	r.is_utc = utc;
++#else
++	r.zone = utc ? icaltimezone_get_utc_timezone() : nullptr;
++#endif
++}
++
++#endif
+--- zarafa-7.1.14/libicalmapi/icalrecurrence.cpp			2015-10-20 11:13:41.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/icalrecurrence.cpp.libical3		2021-03-24 20:09:40.783647592 +0100
+@@ -54,6 +54,7 @@
+ #include <math.h>
+ #include <algorithm>
+ #include "freebusy.h"
++#include "icalcompat.h"
+ 
+ bool operator ==(SPropValue spv, ULONG ulPropTag) {
+ 	return spv.ulPropTag == ulPropTag;
+@@ -863,12 +864,12 @@
+ 		for (iException = lstExceptions.begin(); iException != lstExceptions.end(); iException++) {
+ 			if(bIsAllDay)
+ 			{
+-				ittExDate = icaltime_from_timet(LocalToUTC(*iException, sTZgmt), bIsAllDay);
++				ittExDate = icaltime_from_timet_with_zone(LocalToUTC(*iException, sTZgmt), bIsAllDay, nullptr);
+ 			}
+ 			else
+-				ittExDate = icaltime_from_timet(LocalToUTC(*iException, sTimeZone), 0);
++				ittExDate = icaltime_from_timet_with_zone(LocalToUTC(*iException, sTimeZone), 0, nullptr);
+ 
+-			ittExDate.is_utc = 1;
++			ical_utc(ittExDate, true);
+ 
+ 			icalcomponent_add_property(lpicEvent, icalproperty_new_exdate(ittExDate));
+ 		}
+@@ -987,8 +988,8 @@
+ 		*/
+ 		icRec.count = 0;
+ 		// if untiltime is saved as UTC it breaks last occurrence.
+-		icRec.until = icaltime_from_timet(lpRecurrence->getEndDate() + lpRecurrence->getStartTimeOffset(), bIsAllday);
+-		icRec.until.is_utc = 0;
++		icRec.until = icaltime_from_timet_with_zone(lpRecurrence->getEndDate() + lpRecurrence->getStartTimeOffset(), bIsAllday, nullptr);
++		ical_utc(icRec.until, false);
+ 		break;
+ 	case recurrence::NUMBER:
+ 		icRec.count = lpRecurrence->getCount();
+--- zarafa-7.1.14/libicalmapi/Makefile.am				2015-10-20 10:35:03.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/Makefile.am.libical3			2021-03-24 20:05:15.554338238 +0100
+@@ -16,7 +16,7 @@
+ 
+ libicalmapidir = $(includedir)/icalmapi
+ libicalmapi_HEADERS = icalitem.h nameids.h icaluid.h \
+-	MAPIToICal.h ICalToMAPI.h \
++	MAPIToICal.h ICalToMAPI.h icalcompat.h \
+ 	vtimezone.h valarm.h vconverter.h vevent.h vtodo.h \
+ 	icalrecurrence.h icalmapi.h vfreebusy.h
+ 
+--- zarafa-7.1.14/libicalmapi/valarm.cpp				2015-10-20 11:13:41.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/valarm.cpp.libical3			2021-03-24 20:10:25.009031936 +0100
+@@ -57,6 +57,7 @@
+ #include "CommonUtil.h"
+ #include "Util.h"
+ #include "stringutil.h"
++#include "icalcompat.h"
+ 
+ #ifdef _DEBUG
+ #define new DEBUG_NEW
+@@ -92,8 +93,8 @@
+ 	memset((void *) &sittTrigger, 0, sizeof(icaltriggertype));
+ 
+ 	if (ttReminderTime && bTask) {
+-		sittTrigger.time = icaltime_from_timet(ttReminderTime, false);			// given in UTC
+-		sittTrigger.time.is_utc = 1;
++		sittTrigger.time = icaltime_from_timet_with_zone(ttReminderTime, false, nullptr);			// given in UTC
++		ical_utc(sittTrigger.time, true);
+ 	} else
+ 		sittTrigger.duration = icaldurationtype_from_int(-1 * lRemindBefore * 60);	// set seconds
+ 
+--- zarafa-7.1.14/libicalmapi/vconverter.cpp				2015-10-20 11:13:41.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/vconverter.cpp.libical3			2021-03-24 22:01:11.431379616 +0100
+@@ -59,6 +59,7 @@
+ #include "mapi_ptr.h"
+ #include "namedprops.h"
+ #include "base64.h"
++#include "icalcompat.h"
+ 
+ using namespace std;
+ 
+@@ -639,7 +640,7 @@
+ 
+ 	strUid = bin2hex(lpsProp->Value.bin.cb, lpsProp->Value.bin.lpb);
+ 
+-	icTime = icaltime_from_timet(ICalTimeTypeToUTC(lpiEvent, icProp), 0);
++	icTime = icaltime_from_timet_with_zone(ICalTimeTypeToUTC(lpiEvent, icProp), 0, nullptr);
+ 	sprintf(strHexDate,"%04x%02x%02x", icTime.year, icTime.month, icTime.day);
+ 
+ 	// Exception date is stored in GlobalObjectId
+@@ -2148,8 +2149,8 @@
+ 	// Set creation time / CREATED
+ 	lpPropVal = PpropFindProp(lpMsgProps, ulMsgProps, PR_CREATION_TIME);
+ 	if (lpPropVal) {
+-		ittICalTime = icaltime_from_timet(FileTimeToUnixTime(lpPropVal->Value.ft.dwHighDateTime, lpPropVal->Value.ft.dwLowDateTime), 0);
+-		ittICalTime.is_utc = 1;
++		ittICalTime = icaltime_from_timet_with_zone(FileTimeToUnixTime(lpPropVal->Value.ft.dwHighDateTime, lpPropVal->Value.ft.dwLowDateTime), 0, nullptr);
++		ical_utc(ittICalTime, true);
+ 
+ 		lpProp = icalproperty_new_created(ittICalTime);
+ 		icalcomponent_add_property(lpEvent, lpProp);
+@@ -2169,8 +2170,8 @@
+ 	// Set modification time / LAST-MODIFIED + DTSTAMP
+ 	lpPropVal = PpropFindProp(lpMsgProps, ulMsgProps, PR_LAST_MODIFICATION_TIME);
+ 	if (lpPropVal) {
+-		ittICalTime = icaltime_from_timet(FileTimeToUnixTime(lpPropVal->Value.ft.dwHighDateTime, lpPropVal->Value.ft.dwLowDateTime), 0);
+-		ittICalTime.is_utc = 1;
++		ittICalTime = icaltime_from_timet_with_zone(FileTimeToUnixTime(lpPropVal->Value.ft.dwHighDateTime, lpPropVal->Value.ft.dwLowDateTime), 0, nullptr);
++		ical_utc(ittICalTime, true);
+ 
+ 		lpProp = icalproperty_new_lastmodified(ittICalTime);
+ 		icalcomponent_add_property(lpEvent,lpProp);
+--- zarafa-7.1.14/libicalmapi/vtimezone.cpp				2015-10-20 11:13:41.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/vtimezone.cpp.libical3			2021-03-24 20:14:19.824069285 +0100
+@@ -49,6 +49,7 @@
+ #include <stdlib.h>
+ #include <math.h>
+ #include <time.h>
++#include "icalcompat.h"
+ 
+ using namespace std;
+ 
+@@ -192,7 +193,7 @@
+ 	}
+ 
+ 	icTime = icalcomponent_get_dtstart(icComp);
+-	icTime.is_utc = 1;
++	ical_utc(icTime, true);
+ 
+ 	if (kind == ICAL_XSTANDARD_COMPONENT) {
+ 		// this is set when we request the STD timezone part.
+@@ -342,7 +343,7 @@
+ 
+ 	// STD
+ 	icComp = icalcomponent_new_xstandard();
+-	icTime = icaltime_from_timet(SystemTimeToUnixTime(tsTimeZone.stStdDate), 0);
++	icTime = icaltime_from_timet_with_zone(SystemTimeToUnixTime(tsTimeZone.stStdDate), 0, nullptr);
+ 	icalcomponent_add_property(icComp, icalproperty_new_dtstart(icTime));
+ 	if (tsTimeZone.lStdBias == tsTimeZone.lDstBias || tsTimeZone.stStdDate.wMonth == 0 || tsTimeZone.stDstDate.wMonth == 0) {
+ 		// std == dst
+@@ -373,7 +374,7 @@
+ 	// DST, optional
+ 	if (tsTimeZone.lStdBias != tsTimeZone.lDstBias && tsTimeZone.stStdDate.wMonth != 0 && tsTimeZone.stDstDate.wMonth != 0) {
+ 		icComp = icalcomponent_new_xdaylight();
+-		icTime = icaltime_from_timet(SystemTimeToUnixTime(tsTimeZone.stDstDate), 0);
++		icTime = icaltime_from_timet_with_zone(SystemTimeToUnixTime(tsTimeZone.stDstDate), 0, nullptr);
+ 		icalcomponent_add_property(icComp, icalproperty_new_dtstart(icTime));
+ 
+ 		icalcomponent_add_property(icComp, icalproperty_new_tzoffsetfrom(-tsTimeZone.lBias *60));
+--- zarafa-7.1.14/provider/libserver/ECCacheManager.cpp			2015-10-20 11:13:46.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ECCacheManager.cpp.libical3	2021-03-24 21:48:06.169046380 +0100
+@@ -68,9 +68,9 @@
+ 
+ #include <algorithm>
+ 
+-#define LOG_CACHE_DEBUG(_msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE, "cache: "_msg, ##__VA_ARGS__); }
+-#define LOG_USERCACHE_DEBUG(_msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_USERCACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_USERCACHE, "usercache: "_msg, ##__VA_ARGS__); }
+-#define LOG_CELLCACHE_DEBUG(_msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE, "cellcache: "_msg, ##__VA_ARGS__); }
++#define LOG_CACHE_DEBUG(msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE, "cache: " msg, ##__VA_ARGS__); }
++#define LOG_USERCACHE_DEBUG(msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_USERCACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_USERCACHE, "usercache: " msg, ##__VA_ARGS__); }
++#define LOG_CELLCACHE_DEBUG(msg, ...) if (m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE)) { m_lpLogger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_CACHE, "cellcache: " msg, ##__VA_ARGS__); }
+ 
+ // Specialization for ECsACL
+ template<>
+--- zarafa-7.1.14/provider/libserver/ECDatabaseMySQL.cpp		2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ECDatabaseMySQL.cpp.libical3	2021-03-24 21:55:47.974759496 +0100
+@@ -81,7 +81,7 @@
+ #define DEBUG_TRANSACTION 0
+ #endif
+ 
+-#define LOG_SQL_DEBUG(_plog, _msg, ...) if ((_plog)->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SQL)) (_plog)->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SQL, _msg, ##__VA_ARGS__)
++#define LOG_SQL_DEBUG(_plog, msg, ...) if ((_plog)->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SQL)) (_plog)->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SQL, msg, ##__VA_ARGS__)
+ 
+ // The maximum packet size. This is automatically also the maximum
+ // size of a single entry in the database. This means that PR_BODY, PR_COMPRESSED_RTF
+--- zarafa-7.1.14/provider/libserver/ZarafaCmd.cpp			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ZarafaCmd.cpp.libical3		2021-03-24 21:55:31.623627454 +0100
+@@ -118,7 +118,7 @@
+ #define STROUT_FIX(s) (bSupportUnicode ? (s) : ECStringCompat::UTF8_to_WTF1252(soap, (s)))
+ #define STROUT_FIX_CPY(s) (bSupportUnicode ? s_strcpy(soap, (s)) : ECStringCompat::UTF8_to_WTF1252(soap, (s)))
+ 
+-#define LOG_SOAP_DEBUG(logger, _msg, ...) if (logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SOAP)) { logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SOAP, "soap: "_msg, ##__VA_ARGS__); }
++#define LOG_SOAP_DEBUG(logger, msg, ...) if (logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SOAP)) { logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_SOAP, "soap: " msg, ##__VA_ARGS__); }
+ 
+ #ifdef _DEBUG
+ #define new DEBUG_NEW
+--- zarafa-7.1.14/provider/plugins/plugin.h				2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/plugins/plugin.h.libical3			2021-03-24 21:56:42.074196656 +0100
+@@ -70,7 +70,7 @@
+ 
+ using namespace std;
+ 
+-#define LOG_PLUGIN_DEBUG(_msg, ...) if (m_logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_PLUGIN)) { m_logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_PLUGIN, "plugin: "_msg, ##__VA_ARGS__); }
++#define LOG_PLUGIN_DEBUG(msg, ...) if (m_logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_PLUGIN)) { m_logger->Log(EC_LOGLEVEL_DEBUG|EC_LOGLEVEL_PLUGIN, "plugin: " msg, ##__VA_ARGS__); }
+ 
+ /**
+  * The objectsignature combines the object id with the
+--- zarafa-7.1.14/configure						2021-03-24 22:32:26.083216071 +0100
++++ zarafa-7.1.14/configure.libical3					2021-03-24 22:40:08.332400705 +0100
+@@ -16844,6 +16844,36 @@
+ LFS_CFLAGS=`getconf LFS_CFLAGS`
+ ZCPPFLAGS="$ZCPPFLAGS $LFS_CFLAGS"
+ 
++# Backport of libical 3.0.x support from Kopano needs at least C++11
++{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether C++ compiler understands -std=c++11 option" >&5
++$as_echo_n "checking whether C++ compiler understands -std=c++11... " >&6; }
++ac_ext=cpp
++ac_cpp='$CXXCPP $CPPFLAGS'
++ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
++
++CXXFLAGS="$ZCXXFLAGS -std=c++11"
++cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++
++_ACEOF
++if ac_fn_cxx_try_compile "$LINENO"; then :
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
++$as_echo "yes" >&6; }
++else
++  as_fn_error $? "at least C++11 is needed" "$LINENO" 5
++fi
++rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
++CXXFLAGS="$ZCXXFLAGS"
++ZCXXFLAGS="$ZCXXFLAGS -std=c++11"
++ac_ext=cpp
++ac_cpp='$CXXCPP $CPPFLAGS'
++ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
++ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
++ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
++
++
+ # disable variadic-macros: too much warning: anonymous variadic macros were introduced in C99, only on new compilers
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether C++ compiler understands -Wno-variadic-macros option" >&5
+ $as_echo_n "checking whether C++ compiler understands -Wno-variadic-macros option... " >&6; }
+--- zarafa-7.1.14/libicalmapi/Makefile.in				2015-10-20 10:35:13.000000000 +0200
++++ zarafa-7.1.14/libicalmapi/Makefile.in.libical3			2021-03-24 20:15:45.459810942 +0100
+@@ -370,7 +370,7 @@
+ 
+ libicalmapidir = $(includedir)/icalmapi
+ libicalmapi_HEADERS = icalitem.h nameids.h icaluid.h \
+-	MAPIToICal.h ICalToMAPI.h \
++	MAPIToICal.h ICalToMAPI.h icalcompat.h \
+ 	vtimezone.h valarm.h vconverter.h vevent.h vtodo.h \
+ 	icalrecurrence.h icalmapi.h vfreebusy.h
+ 
