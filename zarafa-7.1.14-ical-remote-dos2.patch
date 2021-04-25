@@ -1,0 +1,57 @@
+Backport of upstream patch from Git commit 5fca684b79841ee285e59279d36c17eb2b8499b0 to fix
+remote DoS with out-of-bounds access in the zarafa-ical daemon of Zarafa 7.1.14. See also:
+
+ - https://seclists.org/oss-sec/2021/q2/1
+ - https://github.com/Kopano-dev/kopano-core/commit/5fca684b79841ee285e59279d36c17eb2b8499b0
+ - https://bugzilla.redhat.com/show_bug.cgi?id=1953242
+ - https://seclists.org/oss-sec/2021/q2/75
+
+Reproducer (replace 'localhost' accordingly): perl -e 'print "GET / HTTP/1.0\nFoo:\n"' | \
+  socat - tcp-connect:localhost:8080
+
+--- zarafa-7.1.14/caldav/Http.cpp			2021-04-25 02:08:00.210346882 +0200
++++ zarafa-7.1.14/caldav/Http.cpp.ical-remote-dos2	2021-04-25 02:14:34.734819443 +0200
+@@ -201,19 +201,36 @@
+ 		if (n == 0) {
+ 			m_strAction = strBuffer;
+ 		} else {
+-			std::string::size_type pos = strBuffer.find(':');
+-			std::string::size_type start = 0;
+-			std::pair<std::map<std::string, std::string>::iterator, bool> r;
++			std::string::size_type keyPos = strBuffer.find(':');
++			std::size_t start = 0;
+ 
++			// Multi-line header
+ 			if (strBuffer[0] == ' ' || strBuffer[0] == '\t') {
+ 				if (iHeader == mapHeaders.end())
+ 					continue;
+-				// continue header
+-				while (strBuffer[start] == ' ' || strBuffer[start] == '\t') start++;
++
++				// Continue header
++				while (strBuffer[start] == ' ' || strBuffer[start] == '\t')
++					++start;
+ 				iHeader->second += strBuffer.substr(start);
++			} else if (keyPos == std::string::npos) {
++				// If we were not in a multi-line header and
++				// didn't find a colon, ignore this header.
++				continue;
+ 			} else {
+-				// new header
+-				r = mapHeaders.insert(make_pair<string,string>(strBuffer.substr(0,pos), strBuffer.substr(pos+2)));
++				// Skip initial spaces in value.
++				auto valuePos = keyPos;
++				++valuePos; // skip colon
++				while (valuePos < strBuffer.size() && strBuffer[valuePos] == ' ') {
++					++valuePos;
++				}
++
++				// If there's no valid value just ignore it and continue
++				if (valuePos >= strBuffer.size()) {
++					continue;
++				}
++
++				auto r = mapHeaders.emplace(strBuffer.substr(0, keyPos), strBuffer.substr(valuePos));
+ 				iHeader = r.first;
+ 			}
+ 		}

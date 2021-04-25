@@ -1,10 +1,12 @@
 Backport of upstream patch from Git commit 512457466b87039c6a8d25887fdaca6173619546 to fix
-remote DoS by memory exhaustion in the zarafa-ical daemon of Zarafa 7.1.14. See also:
+remote DoS by memory exhaustion in the zarafa-ical daemon of Zarafa 7.1.14 (MITRE assigned
+CVE-2021-28994). See also:
 
  - https://seclists.org/oss-sec/2021/q1/244
  - https://seclists.org/oss-sec/2021/q1/256
  - https://github.com/Kopano-dev/kopano-core/commit/512457466b87039c6a8d25887fdaca6173619546
  - https://bugzilla.redhat.com/show_bug.cgi?id=1942773
+ - https://seclists.org/oss-sec/2021/q2/0
 
 Reproducer (replace 'localhost' accordingly): perl -e 'print "GET / HTTP/1.0\nHost: \n"; \
   while(1) { print " " . "A" x 65000 . "\n"; }' | socat - tcp-connect:localhost:8080
