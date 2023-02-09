@@ -1,0 +1,35 @@
+Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.14 which backports the security fix
+by Andreas Rönnquist <gusnan@librem.one> for Kopano <= 11.0.2.51 (for Debian). It fixes a security issue
+which allows attackers to authenticate even if the user account or password is expired. See also:
+
+ - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-26562
+ - https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1016973
+ - https://github.com/Kopano-dev/kopano-core/blob/master/provider/libserver/ECKrbAuth.cpp#L137
+
+--- zarafa-7.1.14/provider/libserver/ECPamAuth.cpp			2015-10-20 11:13:45.000000000 +0200
++++ zarafa-7.1.14/provider/libserver/ECPamAuth.cpp.pam_acct_mgmt	2023-02-09 19:53:11.843375272 +0200
+@@ -111,14 +111,21 @@
+ 	}
+ 
+ 	res = pam_authenticate(pamh, PAM_SILENT);
+-
+-	pam_end(pamh, res);
+-
+ 	if (res != PAM_SUCCESS) {
+ 		*lpstrError = pam_strerror(NULL, res);
++		pam_end(pamh, res);
+ 		er = ZARAFA_E_LOGON_FAILED;
+ 	}
+ 
++	res = pam_acct_mgmt(pamh, PAM_SILENT);
++	if (res != PAM_SUCCESS) {
++		*lpstrError = pam_strerror(NULL, res);
++		pam_end(pamh, res);
++		er = ZARAFA_E_LOGON_FAILED;
++	}
++
++	pam_end(pamh, res);
++
+ exit:
+ 	pthread_mutex_unlock(&cPAMLock.m_mPAMAuthLock);
+ 
