@@ -1,10 +1,16 @@
 Patch by Robert Scheck <robert@fedoraproject.org> for Zarafa <= 7.1.14 which backports the security fix
-by Andreas Rönnquist <gusnan@librem.one> for Kopano <= 11.0.2.51 (for Debian). It fixes a security issue
-which allows attackers to authenticate even if the user account or password is expired. See also:
+by Andreas Rönnquist <gusnan@librem.one> for Kopano Core <= 11.0.2.51 (for Debian). It fixes a security
+issue which allows attackers to authenticate even if the user account or password is expired. See also:
 
  - https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2022-26562
  - https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1016973
+ - https://jira.kopano.io/browse/KC-2021
  - https://github.com/Kopano-dev/kopano-core/blob/master/provider/libserver/ECKrbAuth.cpp#L137
+ - https://bugzilla.redhat.com/show_bug.cgi?id=2192126
+
+The security flaw was introduced between Zarafa 6.30.0 RC 1e (Subversion Revision 14802) and 6.30.8 Final
+(Subversion Revision 18345) in provider/libserver/ECPamAuth.cpp and also affects Kopano Core <= 11.0.2.51
+in provider/libserver/ECKrbAuth.cpp.
 
 --- zarafa-7.1.14/provider/libserver/ECPamAuth.cpp			2015-10-20 11:13:45.000000000 +0200
 +++ zarafa-7.1.14/provider/libserver/ECPamAuth.cpp.pam_acct_mgmt	2023-02-09 19:53:11.843375272 +0200
